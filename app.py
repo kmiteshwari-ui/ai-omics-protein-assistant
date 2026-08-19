@@ -10,6 +10,10 @@ from modules.ai_assistant import generate_protein_analysis
 from modules.structure_viewer import show_structure
 
 
+# ==========================================
+# PAGE CONFIGURATION
+# ==========================================
+
 st.set_page_config(
     page_title="AI Omics & Protein Assistant",
     page_icon="🧬",
@@ -55,6 +59,7 @@ st.write(
 # ==========================================
 
 st.sidebar.title("Analysis Modules")
+
 st.sidebar.write("🧬 Protein Information")
 st.sidebar.write("🧊 AlphaFold Structure")
 st.sidebar.write("🔎 Foldseek Similarity")
@@ -63,7 +68,7 @@ st.sidebar.write("🤖 AI Research Assistant")
 
 
 # ==========================================
-# PROTEIN ANALYSIS
+# PROTEIN INPUT
 # ==========================================
 
 st.header("🧬 Protein Analysis")
@@ -84,31 +89,54 @@ if st.button("🔍 Analyze Protein"):
 
         protein_id = protein_id.strip().upper()
 
+        # Reset previous AI analysis
         st.session_state.ai_analysis = None
 
-        with st.spinner("Fetching UniProt information..."):
+        # ----------------------------------
+        # UniProt
+        # ----------------------------------
 
-            protein = get_protein_info(protein_id)
+        with st.spinner(
+            "Fetching UniProt information..."
+        ):
+
+            protein = get_protein_info(
+                protein_id
+            )
 
         if protein is None:
 
-            st.error("Protein ID not found.")
+            st.error(
+                "Protein ID not found."
+            )
+
             st.session_state.protein = None
 
         else:
 
             st.session_state.protein = protein
 
+            # ----------------------------------
+            # AlphaFold
+            # ----------------------------------
+
             with st.spinner(
                 "Fetching AlphaFold information..."
             ):
 
                 st.session_state.alphafold = (
-                    get_alphafold_info(protein_id)
+                    get_alphafold_info(
+                        protein_id
+                    )
                 )
 
+            # ----------------------------------
+            # Foldseek
+            # ----------------------------------
+
             with st.spinner(
-                "Searching structural databases with Foldseek..."
+                "Searching structural databases "
+                "with Foldseek..."
             ):
 
                 st.session_state.foldseek_results = (
@@ -124,7 +152,7 @@ if st.button("🔍 Analyze Protein"):
 
 
 # ==========================================
-# DISPLAY PROTEIN RESULTS
+# LOAD SESSION RESULTS
 # ==========================================
 
 protein = st.session_state.protein
@@ -132,13 +160,19 @@ alphafold = st.session_state.alphafold
 foldseek_results = st.session_state.foldseek_results
 
 
+# ==========================================
+# DISPLAY PROTEIN RESULTS
+# ==========================================
+
 if protein:
 
-    # --------------------------------------
-    # Protein Information
-    # --------------------------------------
+    # ======================================
+    # PROTEIN INFORMATION
+    # ======================================
 
-    st.subheader("🧬 Protein Information")
+    st.subheader(
+        "🧬 Protein Information"
+    )
 
     col1, col2 = st.columns(2)
 
@@ -173,11 +207,13 @@ if protein:
         )
 
 
-    # --------------------------------------
-    # Functional Annotation
-    # --------------------------------------
+    # ======================================
+    # FUNCTIONAL ANNOTATION
+    # ======================================
 
-    st.subheader("🔬 Functional Annotation")
+    st.subheader(
+        "🔬 Functional Annotation"
+    )
 
     st.write(
         "**Function:**",
@@ -187,49 +223,85 @@ if protein:
     st.write("**GO Terms:**")
 
     for go in protein["go_terms"]:
-        st.write("•", go)
+
+        st.write(
+            "•",
+            go
+        )
 
 
     st.divider()
 
 
-    # --------------------------------------
-    # AlphaFold
-    # --------------------------------------
+    # ======================================
+    # ALPHAFOLD
+    # ======================================
 
-    st.subheader("🧊 AlphaFold Structure")
+    st.subheader(
+        "🧊 AlphaFold Structure"
+    )
 
     if alphafold:
 
         st.write(
             "**pLDDT Score:**",
-            alphafold["plddt"]
+            alphafold.get(
+                "plddt",
+                "N/A"
+            )
         )
 
+        # ----------------------------------
+        # Interactive 3D Viewer
+        # ----------------------------------
+
         if alphafold.get("pdb_url"):
-    st.subheader("🧊 Interactive 3D Structure")
-    show_structure(alphafold["pdb_url"])
+
+            st.subheader(
+                "🧊 Interactive 3D Structure"
+            )
+
+            show_structure(
+                alphafold["pdb_url"]
+            )
+
+        else:
+
+            st.warning(
+                "AlphaFold PDB structure URL "
+                "is not available."
+            )
+
+
+        # ----------------------------------
+        # PAE Image
+        # ----------------------------------
 
         if alphafold.get("pae_image"):
 
+            st.subheader(
+                "AlphaFold Predicted Aligned Error"
+            )
+
             st.image(
                 alphafold["pae_image"],
-                caption="AlphaFold Predicted Aligned Error"
+                caption="AlphaFold PAE"
             )
 
     else:
 
         st.warning(
-            "AlphaFold information not available."
+            "AlphaFold information "
+            "not available."
         )
 
 
     st.divider()
 
 
-    # --------------------------------------
-    # Foldseek
-    # --------------------------------------
+    # ======================================
+    # FOLDSEEK
+    # ======================================
 
     st.subheader(
         "🔎 Structural Similarity — Foldseek"
@@ -297,7 +369,9 @@ if protein:
 
 st.divider()
 
-st.header("📊 Biomarker Discovery")
+st.header(
+    "📊 Biomarker Discovery"
+)
 
 st.write(
     "Upload an expression dataset containing "
@@ -315,27 +389,36 @@ if uploaded_file:
 
     try:
 
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(
+            uploaded_file
+        )
 
-        st.subheader("Uploaded Dataset")
+        st.subheader(
+            "Uploaded Dataset"
+        )
 
         st.dataframe(
             df,
             use_container_width=True
         )
 
-        results = analyze_biomarkers(df)
+        results = analyze_biomarkers(
+            df
+        )
 
         if results is None:
 
             st.error(
-                "CSV must contain Gene plus at least "
-                "two Healthy (H) and two Disease (D) samples."
+                "CSV must contain Gene plus "
+                "at least two Healthy (H) and "
+                "two Disease (D) samples."
             )
 
         else:
 
-            st.session_state.biomarker_results = results
+            st.session_state.biomarker_results = (
+                results
+            )
 
             st.subheader(
                 "🧪 Biomarker Candidates"
@@ -347,11 +430,13 @@ if uploaded_file:
             )
 
 
-            # --------------------------------------
+            # ----------------------------------
             # Top Candidates
-            # --------------------------------------
+            # ----------------------------------
 
-            st.subheader("🏆 Top Candidates")
+            st.subheader(
+                "🏆 Top Candidates"
+            )
 
             for _, row in results.head(5).iterrows():
 
@@ -364,18 +449,22 @@ if uploaded_file:
                 )
 
 
-            # --------------------------------------
+            # ----------------------------------
             # Volcano Plot
-            # --------------------------------------
+            # ----------------------------------
 
-            st.subheader("📊 Volcano Plot")
+            st.subheader(
+                "📊 Volcano Plot"
+            )
 
             plot_data = results.copy()
 
             plot_data[
                 "-log10 Adjusted P-value"
             ] = -np.log10(
-                plot_data["Adjusted P-value"] + 1e-300
+                plot_data[
+                    "Adjusted P-value"
+                ] + 1e-300
             )
 
             st.scatter_chart(
@@ -398,17 +487,22 @@ if uploaded_file:
 
 st.divider()
 
-st.header("🤖 AI Research Assistant")
+st.header(
+    "🤖 AI Research Assistant"
+)
 
 st.write(
-    "Generate an integrated interpretation using "
-    "protein, structural, functional, and biomarker evidence."
+    "Generate an integrated interpretation "
+    "using protein, structural, functional, "
+    "and biomarker evidence."
 )
 
 
 if protein:
 
-    if st.button("🧠 Generate AI Analysis"):
+    if st.button(
+        "🧠 Generate AI Analysis"
+    ):
 
         with st.spinner(
             "Generating integrated research analysis..."
@@ -435,5 +529,6 @@ if protein:
 else:
 
     st.info(
-        "Analyze a protein first to use the AI Research Assistant."
+        "Analyze a protein first to use "
+        "the AI Research Assistant."
     )
