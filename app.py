@@ -1,87 +1,203 @@
-import requests
+import streamlit as st
+
+from modules.uniprot import get_protein_info
+from modules.alphafold import get_alphafold_info
 
 
-def get_protein_info(protein_id):
-    url = f"https://rest.uniprot.org/uniprotkb/{protein_id}.json"
+st.set_page_config(
+    page_title="AI Omics & Protein Assistant",
+    page_icon="🧬",
+    layout="wide"
+)
 
-    response = requests.get(url, timeout=15)
 
-    if response.status_code != 200:
-        return None
+# -----------------------------
+# Header
+# -----------------------------
 
-    data = response.json()
+st.title("🧬 AI Omics & Protein Intelligence Assistant")
 
-    # Protein name
-    protein_name = (
-        data.get("proteinDescription", {})
-        .get("recommendedName", {})
-        .get("fullName", {})
-        .get("value", "Not available")
-    )
+st.write(
+    "An AI-assisted platform for protein analysis, "
+    "functional annotation, structural analysis, "
+    "and biomarker discovery."
+)
 
-    # Organism
-    organism = data.get("organism", {}).get(
-        "scientificName", "Not available"
-    )
+st.divider()
 
-    # Sequence length
-    sequence = data.get("sequence", {})
-    length = sequence.get("length", "Not available")
 
-    # Gene name
-    genes = data.get("genes", [])
-    gene_name = "Not available"
+# -----------------------------
+# Protein Input
+# -----------------------------
 
-    if genes:
-        gene_name = (
-            genes[0]
-            .get("geneName", {})
-            .get("value", "Not available")
-        )
+protein_id = st.text_input(
+    "Enter UniProt / TrEMBL Protein ID",
+    placeholder="Example: P00722"
+)
 
-    # Function
-    function = "Not available"
 
-    for comment in data.get("comments", []):
-        if comment.get("commentType") == "FUNCTION":
+if st.button("🔍 Analyze Protein"):
 
-            texts = comment.get("texts", [])
+    if not protein_id:
 
-            if texts:
-                function = " ".join(
-                    text.get("value", "")
-                    for text in texts
-                    if text.get("value")
+        st.warning("Please enter a protein ID.")
+
+    else:
+
+        protein_id = protein_id.strip().upper()
+
+        # -----------------------------
+        # UniProt
+        # -----------------------------
+
+        with st.spinner("Fetching UniProt information..."):
+
+            protein = get_protein_info(protein_id)
+
+
+        if protein is None:
+
+            st.error(
+                "Protein ID not found. "
+                "Please check the UniProt / TrEMBL ID."
+            )
+
+        else:
+
+            st.success(
+                "Protein information retrieved successfully!"
+            )
+
+
+            # -----------------------------
+            # Protein Information
+            # -----------------------------
+
+            st.subheader("🧬 Protein Information")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+
+                st.write(
+                    "**Protein ID:**",
+                    protein["protein_id"]
                 )
 
-            # Alternative format
-            if function == "Not available":
-                function = comment.get(
-                    "text", {}
-                ).get("value", "Not available")
+                st.write(
+                    "**Protein Name:**",
+                    protein["protein_name"]
+                )
 
-            break
+                st.write(
+                    "**Gene Name:**",
+                    protein["gene_name"]
+                )
 
-    # GO terms
-    go_terms = []
 
-    for reference in data.get("uniProtKBCrossReferences", []):
-        if reference.get("database") == "GO":
-            properties = reference.get("properties", [])
+            with col2:
 
-            for prop in properties:
-                if prop.get("key") == "GoTerm":
-                    go_terms.append(prop.get("value"))
+                st.write(
+                    "**Organism:**",
+                    protein["organism"]
+                )
 
-    if not go_terms:
-        go_terms = ["Not available"]
+                st.write(
+                    "**Length:**",
+                    protein["length"],
+                    "amino acids"
+                )
 
-    return {
-        "protein_id": protein_id,
-        "protein_name": protein_name,
-        "gene_name": gene_name,
-        "organism": organism,
-        "length": length,
-        "function": function,
-        "go_terms": go_terms,
-    }
+
+            # -----------------------------
+            # Function
+            # -----------------------------
+
+            st.subheader("🔬 Functional Annotation")
+
+            st.write(
+                "**Function:**",
+                protein["function"]
+            )
+
+
+            # -----------------------------
+            # GO Terms
+            # -----------------------------
+
+            st.write("**GO Terms:**")
+
+            go_terms = protein["go_terms"]
+
+            if go_terms and go_terms[0] != "Not available":
+
+                for go in go_terms:
+                    st.write("•", go)
+
+            else:
+
+                st.write("Not available")
+
+
+            st.divider()
+
+
+            # -----------------------------
+            # AlphaFold
+            # -----------------------------
+
+            st.subheader("🧊 AlphaFold Structure")
+
+            with st.spinner(
+                "Fetching AlphaFold information..."
+            ):
+
+                alphafold = get_alphafold_info(
+                    protein_id
+                )
+
+
+            if alphafold:
+
+                st.write(
+                    "**pLDDT Score:**",
+                    alphafold["plddt"]
+                )
+
+
+                if alphafold.get("pdb_url"):
+
+                    st.link_button(
+                        "🔗 View AlphaFold Structure",
+                        alphafold["pdb_url"]
+                    )
+
+
+                if alphafold.get("pae_image"):
+
+                    st.image(
+                        alphafold["pae_image"],
+                        caption="AlphaFold Predicted Aligned Error"
+                    )
+
+
+            else:
+
+                st.warning(
+                    "AlphaFold information not available "
+                    "for this protein."
+                )
+
+
+# -----------------------------
+# Sidebar
+# -----------------------------
+
+st.sidebar.title("Analysis Modules")
+
+st.sidebar.write("🧬 Protein Information")
+st.sidebar.write("🧊 AlphaFold Structure")
+st.sidebar.write("🔬 Functional Annotation")
+st.sidebar.write("🔎 Foldseek Similarity")
+st.sidebar.write("📊 Biomarker Analysis")
+st.sidebar.write("🤖 AI Research Assistant")
