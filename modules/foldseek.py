@@ -2,128 +2,150 @@ import requests
 import time
 
 
-FOLDSEEK_URL = "https://search.foldseek.com/api"
+FOLDSEEK_API = "https://search.foldseek.com/api"
 
 
-def get_alphafold_pdb(protein_id):
-    url = f"https://alphafold.ebi.ac.uk/files/AF-{protein_id}-F1-model_v6.pdb"
-
-    response = requests.get(url, timeout=30)
-
-    if response.status_code != 200:
-        return None
-
-    return response.content
-
-
-def search_foldseek(protein_id, max_results=5):
-
-    pdb_content = get_alphafold_pdb(protein_id)
-
-    if not pdb_content:
-        return None
-
-    # Submit structure
-    files = {
-        "q": (
-            f"AF-{protein_id}.pdb",
-            pdb_content,
-            "application/octet-stream"
-        )
-    }
-
-    data = [
-        ("mode", "3diaa"),
-        ("database[]", "pdb100")
-    ]
-
-    response = requests.post(
-        f"{FOLDSEEK_URL}/ticket",
-        files=files,
-        data=data,
-        timeout=60
-    )
-
-    if response.status_code != 200:
-        return None
-
-    ticket = response.json()
-    ticket_id = ticket.get("id")
-
-    if not ticket_id:
-        return None
-
-    # Poll until complete
-    for _ in range(30):
-
-        status_response = requests.get(
-            f"{FOLDSEEK_URL}/ticket/{ticket_id}",
+def submit_structure(structure_url, protein_id):
+    try:
+        response = requests.get(
+            structure_url,
             timeout=30
         )
 
-        if status_response.status_code != 200:
+        if response.status_code != 200:
             return None
 
-        status = status_response.json().get("status")
+        structure_data = response.content
 
-        if status == "ERROR":
+        files = {
+            "q": (
+                f"{protein_id}.pdb",
+                structure_data,
+                "application/octet-stream"
+            )
+        }
+
+        data = [
+            ("mode", "3diaa"),
+            ("database[]", "pdb100")
+        ]
+
+        response = requests.post(
+            f"{FOLDSEEK_API}/ticket",
+            files=files,
+            data=data,
+            timeout=60
+        )
+
+        if response.status_code != 200:
             return None
 
-        if status == "COMPLETE":
-            break
+        return response.json().get("id")
 
-        time.sleep(3)
+    except requests.RequestException:
+        return None
+
+
+def get_foldseek_results(ticket_id, max_results=5):
+
+    for _ in range(30):
+
+        try:
+            response = requests.get(
+                f"{FOLDSEEK_API}/ticket/{ticket_id}",
+                timeout=30
+            )
+
+            if response.status_code != 200:
+                return None
+
+            status = response.json().get("status")
+
+            if status == "ERROR":
+                return None
+
+            if status == "COMPLETE":
+                break
+
+            time.sleep(3)
+
+        except requests.RequestException:
+            return None
 
     else:
         return None
 
-    # Get results
-    result_response = requests.get(
-        f"{FOLDSEEK_URL}/result/{ticket_id}/0",
-        timeout=60
-    )
 
-    if result_response.status_code != 200:
-        return None
+    try:
 
-    result_data = result_response.json()
+        response = requests.get(
+            f"{FOLDSEEK_API}/result/{ticket_id}/0",
+            timeout=60
+        )
 
-    return parse_results(result_data, max_results)
+        if response.status_code != 200:
+            return None
 
+        data = response.json()
 
-def parse_results(result_data, max_results):
+        hits = []
 
-    hits = []
+        for result in data.get("results", []):
 
-    for result_group in result_data.get("results", []):
-
-        for alignment_group in result_group.get(
-            "alignments", []
-        ):
-
-            alignments = alignment_group
+            alignments = result.get(
+                "alignments",
+                []
+            )
 
             if isinstance(alignments, dict):
                 alignments = [alignments]
 
-            for alignment in alignments:
+            for hit in alignments:
 
                 hits.append({
-                    "target": alignment.get(
-                        "target", "Unknown"
+                    "target": hit.get(
+                        "target",
+                        "Unknown"
                     ),
-                    "sequence_identity": alignment.get(
-                        "seqId"
+                    "sequence_identity": hit.get(
+                        "seqId",
+                        "N/A"
                     ),
-                    "e_value": alignment.get(
-                        "eval"
+                    "e_value": hit.get(
+                        "eval",
+                        "N/A"
                     ),
-                    "score": alignment.get(
-                        "score"
+                    "alignment_length": hit.get(
+                        "alnLength",
+                        "N/A"
                     ),
-                    "alignment_length": alignment.get(
-                        "alnLength"
+                    "score": hit.get(
+                        "score",
+                        "N/A"
                     )
                 })
 
-    return hits[:max_results]
+        return hits[:max_results]
+
+    except requests.RequestException:
+        return None
+
+
+def search_foldseek(
+    structure_url,
+    protein_id,
+    max_results=5
+):
+
+    ticket_id = submit_structure(
+        structure_url,
+        protein_id
+    )
+
+    if not ticket_id:
+        return None
+
+    return get_foldseek_results(
+        ticket_id,
+        max_results
+    )
