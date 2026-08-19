@@ -187,11 +187,29 @@ if st.button("🔍 Analyze Protein"):
             "with Foldseek..."
         ):
 
-            # KEEP THIS EXACTLY AS IT WAS
-            foldseek_results = search_foldseek(
-                structure["structure_url"],
-                protein_id,
-                max_results=5
+            try:
+
+                foldseek_results = search_foldseek(
+                    structure["structure_url"],
+                    protein_id,
+                    max_results=5
+                )
+
+            except Exception as e:
+
+                st.warning(
+                    f"Foldseek search failed: {e}"
+                )
+
+                foldseek_results = None
+
+        if foldseek_results is None:
+
+            st.info(
+                "Foldseek returned no results. This can "
+                "happen if the search server is busy, "
+                "the structure could not be downloaded, "
+                "or the search timed out."
             )
 
         st.session_state.foldseek_results = (
