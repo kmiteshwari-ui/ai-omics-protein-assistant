@@ -39,8 +39,14 @@ def get_protein_info(protein_id):
             .get("value", "Not available")
         )
 
+    # ------------------------------------------------
     # Function
+    # ------------------------------------------------
+    # Preferred source: a free-text "FUNCTION" comment.
+    # ------------------------------------------------
+
     function = "Not available"
+    function_source = None
 
     for comment in data.get("comments", []):
         if comment.get("commentType") == "FUNCTION":
@@ -60,7 +66,34 @@ def get_protein_info(protein_id):
                     "text", {}
                 ).get("value", "Not available")
 
+            if function != "Not available":
+                function_source = "function_comment"
+
             break
+
+    # ------------------------------------------------
+    # Fallback source: "CATALYTIC ACTIVITY" comment.
+    # Many well-annotated enzyme entries (e.g. LacZ /
+    # beta-galactosidase, P00722) don't carry a separate
+    # FUNCTION comment at all — their function is expressed
+    # only through the reaction they catalyze.
+    # ------------------------------------------------
+
+    if function == "Not available":
+
+        for comment in data.get("comments", []):
+
+            if comment.get("commentType") == "CATALYTIC ACTIVITY":
+
+                reaction = comment.get("reaction", {})
+                reaction_text = reaction.get("name")
+
+                if reaction_text:
+                    function = (
+                        f"Catalyzes the reaction: {reaction_text}"
+                    )
+                    function_source = "catalytic_activity"
+                    break
 
     # GO terms
     go_terms = []
@@ -83,5 +116,6 @@ def get_protein_info(protein_id):
         "organism": organism,
         "length": length,
         "function": function,
+        "function_source": function_source,
         "go_terms": go_terms,
     }
