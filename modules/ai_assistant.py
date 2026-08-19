@@ -20,20 +20,69 @@ def generate_protein_analysis(
         f"**Length:** {protein['length']} amino acids"
     )
 
+    # ==========================================
     # Functional interpretation
+    # ==========================================
+
     report.append("### 🔬 Functional Interpretation")
 
+    top_hit = None
+
+    if foldseek_results:
+        top_hit = foldseek_results[0]
+
     if protein["function"] != "Not available":
+
+        # Curated UniProt evidence (either a FUNCTION comment,
+        # or a CATALYTIC ACTIVITY fallback — see modules/uniprot.py)
+        source_label = (
+            "UniProt annotation"
+            if protein.get("function_source") == "function_comment"
+            else "UniProt (catalytic activity)"
+        )
+
         report.append(
-            f"UniProt annotation indicates: "
+            f"{source_label} indicates: "
             f"{protein['function']}"
         )
+
+    elif top_hit and top_hit.get("function") and \
+            top_hit.get("function") != "Not available":
+
+        # No curated UniProt function at all — fall back to the
+        # top Foldseek hit's annotated function as an inferred hypothesis.
+        hit_name = top_hit.get(
+            "protein_name", "an unidentified structural homolog"
+        )
+
+        seq_id = top_hit.get("sequence_identity", "N/A")
+
+        report.append(
+            "No curated UniProt functional annotation is available "
+            "for this entry."
+        )
+
+        report.append(
+            f"Based on structural similarity to **{hit_name}** "
+            f"(Foldseek top hit, sequence identity: **{seq_id}**), "
+            f"the inferred function is: {top_hit.get('function')}"
+        )
+
+        report.append(
+            "_This is a structure-based functional hypothesis, "
+            "not a curated annotation, and should be treated "
+            "accordingly._"
+        )
+
     else:
         report.append(
             "No functional description is currently available."
         )
 
+    # ==========================================
     # AlphaFold
+    # ==========================================
+
     report.append("### 🧊 Structural Evidence")
 
     if alphafold:
@@ -56,7 +105,10 @@ def generate_protein_analysis(
             "AlphaFold information was not available."
         )
 
+    # ==========================================
     # Foldseek
+    # ==========================================
+
     report.append("### 🔎 Foldseek Evidence")
 
     if foldseek_results:
@@ -65,8 +117,6 @@ def generate_protein_analysis(
             f"Foldseek identified "
             f"**{len(foldseek_results)} structural hits**."
         )
-
-        top_hit = foldseek_results[0]
 
         report.append(
             f"The top structural hit is "
@@ -89,7 +139,10 @@ def generate_protein_analysis(
             "No Foldseek hits were available."
         )
 
+    # ==========================================
     # Biomarker analysis
+    # ==========================================
+
     report.append("### 🧪 Biomarker Analysis")
 
     if biomarker_results is not None and not biomarker_results.empty:
@@ -134,7 +187,10 @@ def generate_protein_analysis(
             "No biomarker dataset has been analyzed yet."
         )
 
+    # ==========================================
     # Recommendations
+    # ==========================================
+
     report.append("### 🔬 Recommended Next Steps")
 
     report.append(
