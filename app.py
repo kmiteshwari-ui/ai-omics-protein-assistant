@@ -7,7 +7,7 @@ from modules.alphafold import get_alphafold_info
 from modules.structure import get_pdb_structure
 from modules.foldseek import search_foldseek
 from modules.hit_annotation import get_hit_annotation
-from modules.biomarker import analyze_biomarkers
+from modules.biomarker import analyze_biomarkers, get_gene_evidence
 from modules.ai_assistant import generate_protein_analysis
 from modules.structure_viewer import show_structure
 
@@ -668,8 +668,118 @@ if uploaded_file:
                 results
             )
 
+            # ==================================
+            # GENE-SPECIFIC EVIDENCE FOR THE
+            # PROTEIN CURRENTLY BEING ANALYZED
+            # ==================================
+
             st.subheader(
-                "🧪 Biomarker Candidates"
+                "🎯 Evidence for Selected Protein"
+            )
+
+            if protein is None:
+
+                st.info(
+                    "Analyze a protein above first — "
+                    "biomarker evidence will then be "
+                    "matched to its gene automatically."
+                )
+
+            else:
+
+                target_gene = protein.get("gene_name")
+
+                gene_evidence = get_gene_evidence(
+                    results, target_gene
+                )
+
+                if target_gene in (None, "Not available"):
+
+                    st.warning(
+                        "No gene name is available for "
+                        f"{protein['protein_name']} "
+                        f"({protein['protein_id']}), so it "
+                        "can't be matched against this dataset."
+                    )
+
+                elif gene_evidence is None:
+
+                    st.warning(
+                        f"**{target_gene}** "
+                        f"({protein['protein_name']}) was not "
+                        "found in the uploaded dataset."
+                    )
+
+                else:
+
+                    candidate = gene_evidence.get(
+                        "Candidate"
+                    )
+
+                    st.write(
+                        f"**Gene:** {target_gene} "
+                        f"({protein['protein_name']})"
+                    )
+
+                    c1, c2, c3 = st.columns(3)
+
+                    with c1:
+                        st.metric(
+                            "Healthy Mean",
+                            f"{gene_evidence['Healthy Mean']:.2f}"
+                        )
+
+                    with c2:
+                        st.metric(
+                            "Disease Mean",
+                            f"{gene_evidence['Disease Mean']:.2f}"
+                        )
+
+                    with c3:
+                        st.metric(
+                            "Fold Change",
+                            f"{gene_evidence['Fold Change']:.2f}"
+                        )
+
+                    c4, c5 = st.columns(2)
+
+                    with c4:
+                        st.metric(
+                            "Log2 Fold Change",
+                            f"{gene_evidence['Log2 Fold Change']:.2f}"
+                        )
+
+                    with c5:
+                        st.metric(
+                            "Adjusted P-value",
+                            f"{gene_evidence['Adjusted P-value']:.4f}"
+                        )
+
+                    if candidate == "Potential Candidate":
+
+                        st.success(
+                            f"**{target_gene}** is flagged as a "
+                            "**potential biomarker candidate** "
+                            "based on this dataset."
+                        )
+
+                    else:
+
+                        st.info(
+                            f"**{target_gene}** does not meet the "
+                            "fold-change / significance thresholds "
+                            "in this dataset."
+                        )
+
+            st.divider()
+
+
+            # ==================================
+            # FULL DATASET (all genes, for context)
+            # ==================================
+
+            st.subheader(
+                "🧪 Biomarker Candidates (All Genes)"
             )
 
             st.dataframe(
@@ -678,7 +788,7 @@ if uploaded_file:
             )
 
             st.subheader(
-                "🏆 Top Candidates"
+                "🏆 Top Candidates (All Genes)"
             )
 
             for _, row in results.head(5).iterrows():
