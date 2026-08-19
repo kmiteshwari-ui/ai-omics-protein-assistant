@@ -6,6 +6,7 @@ FOLDSEEK_API = "https://search.foldseek.com/api"
 
 
 def submit_structure(structure_url, protein_id):
+    """Download the structure and submit it to Foldseek."""
 
     try:
         response = requests.get(
@@ -39,27 +40,31 @@ def submit_structure(structure_url, protein_id):
         if response.status_code != 200:
             return None
 
-        return response.json().get("id")
+        result = response.json()
+
+        return result.get("id")
 
     except requests.RequestException:
         return None
 
 
 def get_foldseek_results(ticket_id, max_results=5):
+    """Poll Foldseek and retrieve the results."""
 
-    for _ in range(30):
+    for _ in range(40):
 
         try:
-
-            response = requests.get(
+            status_response = requests.get(
                 f"{FOLDSEEK_API}/ticket/{ticket_id}",
                 timeout=30
             )
 
-            if response.status_code != 200:
+            if status_response.status_code != 200:
                 return None
 
-            status = response.json().get("status")
+            status_data = status_response.json()
+
+            status = status_data.get("status")
 
             if status == "ERROR":
                 return None
@@ -73,78 +78,163 @@ def get_foldseek_results(ticket_id, max_results=5):
             return None
 
     else:
-
         return None
 
 
+    # Get first result set
     try:
 
-        response = requests.get(
+        result_response = requests.get(
             f"{FOLDSEEK_API}/result/{ticket_id}/0",
             timeout=60
         )
 
-        if response.status_code != 200:
+        if result_response.status_code != 200:
             return None
 
-        data = response.json()
+        data = result_response.json()
 
-        hits = []
+    except (requests.RequestException, ValueError):
+        return None
 
-        for result in data.get("results", []):
 
-            alignments = result.get(
-                "alignments",
-                []
-            )
+    hits = []
 
-            # Handle unexpected API format
-            if isinstance(alignments, dict):
-                alignments = [alignments]
 
-            if not isinstance(alignments, list):
+    # ======================================
+    # Parse Foldseek result
+    # ======================================
+
+    for result_group in data.get("results", []):
+
+        alignments = result_group.get(
+            "alignments",
+            []
+        )
+
+        if not isinstance(alignments, list):
+            continue
+
+
+        for alignment in alignments:
+
+            if not isinstance(alignment, dict):
                 continue
 
-            for hit in alignments:
 
-                # Ignore invalid objects
-                if not isinstance(hit, dict):
-                    continue
+            # Some Foldseek responses contain
+            # the actual hit information inside
+            # the "aln" list.
 
-                target = hit.get(
-                    "target",
-                    "Unknown"
+            nested = alignment.get("aln")
+
+
+            if isinstance(nested, list) and nested:
+
+                for hit in nested:
+
+                    if not isinstance(hit, dict):
+                        continue
+
+                    hits.append(
+                        extract_hit(hit)
+                    )
+
+            else:
+
+                hits.append(
+                    extract_hit(alignment)
                 )
 
-                hits.append({
-                    "target": target,
 
-                    "sequence_identity": hit.get(
-                        "seqId",
-                        "N/A"
-                    ),
+    # Remove empty/duplicate targets
+    unique_hits = []
 
-                    "e_value": hit.get(
-                        "eval",
-                        "N/A"
-                    ),
+    seen = set()
 
-                    "alignment_length": hit.get(
-                        "alnLength",
-                        "N/A"
-                    ),
+    for hit in hits:
 
-                    "score": hit.get(
-                        "score",
-                        "N/A"
-                    )
-                })
+        target = hit.get(
+            "target",
+            "Unknown"
+        )
 
-        return hits[:max_results]
+        if target not in seen:
 
-    except (requests.RequestException, ValueError, TypeError):
+            seen.add(target)
+            unique_hits.append(hit)
 
-        return None
+
+    return unique_hits[:max_results]
+
+
+def extract_hit(hit):
+    """Safely extract useful Foldseek fields."""
+
+    return {
+
+        "target": hit.get(
+            "target",
+            "Unknown"
+        ),
+
+        "sequence_identity": hit.get(
+            "fident",
+            hit.get(
+                "seqId",
+                "N/A"
+            )
+        ),
+
+        "e_value": hit.get(
+            "evalue",
+            hit.get(
+                "eval",
+                "N/A"
+            )
+        ),
+
+        "alignment_length": hit.get(
+            "alnlen",
+            hit.get(
+                "alnLength",
+                "N/A"
+            )
+        ),
+
+        "bit_score": hit.get(
+            "bits",
+            "N/A"
+        ),
+
+        # TM-score fields
+        "tm_score": hit.get(
+            "alntmscore",
+            "N/A"
+        ),
+
+        "query_tm_score": hit.get(
+            "qtmscore",
+            "N/A"
+        ),
+
+        "target_tm_score": hit.get(
+            "ttmscore",
+            "N/A"
+        ),
+
+        # Structural confidence
+        "lddt": hit.get(
+            "lddt",
+            "N/A"
+        ),
+
+        # Homology probability
+        "probability": hit.get(
+            "prob",
+            "N/A"
+        )
+    }
 
 
 def search_foldseek(
@@ -152,6 +242,7 @@ def search_foldseek(
     protein_id,
     max_results=5
 ):
+    """Complete Foldseek search pipeline."""
 
     ticket_id = submit_structure(
         structure_url,
