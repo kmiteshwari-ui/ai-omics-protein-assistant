@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 from modules.uniprot import get_protein_info
 from modules.alphafold import get_alphafold_info
@@ -31,6 +32,9 @@ if "foldseek_results" not in st.session_state:
 if "ai_analysis" not in st.session_state:
     st.session_state.ai_analysis = None
 
+if "biomarker_results" not in st.session_state:
+    st.session_state.biomarker_results = None
+
 
 # ==========================================
 # HEADER
@@ -50,7 +54,6 @@ st.write(
 # ==========================================
 
 st.sidebar.title("Analysis Modules")
-
 st.sidebar.write("🧬 Protein Information")
 st.sidebar.write("🧊 AlphaFold Structure")
 st.sidebar.write("🔎 Foldseek Similarity")
@@ -80,12 +83,7 @@ if st.button("🔍 Analyze Protein"):
 
         protein_id = protein_id.strip().upper()
 
-        # Reset previous AI response
         st.session_state.ai_analysis = None
-
-        # -------------------------
-        # UniProt
-        # -------------------------
 
         with st.spinner("Fetching UniProt information..."):
 
@@ -94,20 +92,11 @@ if st.button("🔍 Analyze Protein"):
         if protein is None:
 
             st.error("Protein ID not found.")
-
             st.session_state.protein = None
 
         else:
 
             st.session_state.protein = protein
-
-            st.success(
-                "Protein information retrieved!"
-            )
-
-            # -------------------------
-            # AlphaFold
-            # -------------------------
 
             with st.spinner(
                 "Fetching AlphaFold information..."
@@ -116,10 +105,6 @@ if st.button("🔍 Analyze Protein"):
                 st.session_state.alphafold = (
                     get_alphafold_info(protein_id)
                 )
-
-            # -------------------------
-            # Foldseek
-            # -------------------------
 
             with st.spinner(
                 "Searching structural databases with Foldseek..."
@@ -131,6 +116,10 @@ if st.button("🔍 Analyze Protein"):
                         max_results=5
                     )
                 )
+
+            st.success(
+                "Protein analysis completed!"
+            )
 
 
 # ==========================================
@@ -144,9 +133,9 @@ foldseek_results = st.session_state.foldseek_results
 
 if protein:
 
-    # ======================================
-    # PROTEIN INFORMATION
-    # ======================================
+    # --------------------------------------
+    # Protein Information
+    # --------------------------------------
 
     st.subheader("🧬 Protein Information")
 
@@ -183,9 +172,9 @@ if protein:
         )
 
 
-    # ======================================
-    # FUNCTION
-    # ======================================
+    # --------------------------------------
+    # Functional Annotation
+    # --------------------------------------
 
     st.subheader("🔬 Functional Annotation")
 
@@ -197,16 +186,15 @@ if protein:
     st.write("**GO Terms:**")
 
     for go in protein["go_terms"]:
-
         st.write("•", go)
 
 
     st.divider()
 
 
-    # ======================================
-    # ALPHAFOLD
-    # ======================================
+    # --------------------------------------
+    # AlphaFold
+    # --------------------------------------
 
     st.subheader("🧊 AlphaFold Structure")
 
@@ -241,9 +229,9 @@ if protein:
     st.divider()
 
 
-    # ======================================
-    # FOLDSEEK
-    # ======================================
+    # --------------------------------------
+    # Foldseek
+    # --------------------------------------
 
     st.subheader(
         "🔎 Structural Similarity — Foldseek"
@@ -305,45 +293,6 @@ if protein:
         )
 
 
-    st.divider()
-
-
-    # ======================================
-    # AI ASSISTANT
-    # ======================================
-
-    st.subheader(
-        "🤖 AI Research Assistant"
-    )
-
-    st.write(
-        "Generate an interpretation using "
-        "the protein, structural and functional evidence."
-    )
-
-
-    if st.button("🧠 Generate AI Analysis"):
-
-        with st.spinner(
-            "Generating research interpretation..."
-        ):
-
-            st.session_state.ai_analysis = (
-                generate_protein_analysis(
-                    protein,
-                    alphafold,
-                    foldseek_results
-                )
-            )
-
-
-    if st.session_state.ai_analysis:
-
-        st.markdown(
-            st.session_state.ai_analysis
-        )
-
-
 # ==========================================
 # BIOMARKER ANALYSIS
 # ==========================================
@@ -354,7 +303,7 @@ st.header("📊 Biomarker Discovery")
 
 st.write(
     "Upload an expression dataset containing "
-    "Gene, Healthy and Disease columns."
+    "multiple Healthy and Disease samples."
 )
 
 
@@ -368,31 +317,27 @@ if uploaded_file:
 
     try:
 
-        df = pd.read_csv(
-            uploaded_file
-        )
+        df = pd.read_csv(uploaded_file)
 
-        st.subheader(
-            "Uploaded Dataset"
-        )
+        st.subheader("Uploaded Dataset")
 
         st.dataframe(
             df,
             use_container_width=True
         )
 
-        results = analyze_biomarkers(
-            df
-        )
+        results = analyze_biomarkers(df)
 
         if results is None:
 
             st.error(
-                "CSV must contain: "
-                "Gene, Healthy, Disease"
+                "CSV must contain Gene plus at least "
+                "two Healthy (H) and two Disease (D) samples."
             )
 
         else:
+
+            st.session_state.biomarker_results = results
 
             st.subheader(
                 "🧪 Biomarker Candidates"
@@ -403,9 +348,12 @@ if uploaded_file:
                 use_container_width=True
             )
 
-            st.subheader(
-                "🏆 Top Candidates"
-            )
+
+            # --------------------------------------
+            # Top Candidates
+            # --------------------------------------
+
+            st.subheader("🏆 Top Candidates")
 
             for _, row in results.head(5).iterrows():
 
@@ -413,12 +361,81 @@ if uploaded_file:
                     f"**{row['Gene']}** — "
                     f"Fold Change: "
                     f"{row['Fold Change']:.2f} | "
-                    f"Score: "
-                    f"{row['Biomarker Score']:.1f}"
+                    f"Adjusted P-value: "
+                    f"{row['Adjusted P-value']:.4f}"
                 )
+
+
+            # --------------------------------------
+            # Volcano Plot
+            # --------------------------------------
+
+            st.subheader("📊 Volcano Plot")
+
+            plot_data = results.copy()
+
+            plot_data[
+                "-log10 Adjusted P-value"
+            ] = -np.log10(
+                plot_data["Adjusted P-value"] + 1e-300
+            )
+
+            st.scatter_chart(
+                plot_data,
+                x="Log2 Fold Change",
+                y="-log10 Adjusted P-value"
+            )
+
 
     except Exception as e:
 
         st.error(
             f"Error processing file: {e}"
         )
+
+
+# ==========================================
+# AI RESEARCH ASSISTANT
+# ==========================================
+
+st.divider()
+
+st.header("🤖 AI Research Assistant")
+
+st.write(
+    "Generate an integrated interpretation using "
+    "protein, structural, functional, and biomarker evidence."
+)
+
+
+if protein:
+
+    if st.button("🧠 Generate AI Analysis"):
+
+        with st.spinner(
+            "Generating integrated research analysis..."
+        ):
+
+            st.session_state.ai_analysis = (
+                generate_protein_analysis(
+                    protein=protein,
+                    alphafold=alphafold,
+                    foldseek_results=foldseek_results,
+                    biomarker_results=(
+                        st.session_state.biomarker_results
+                    )
+                )
+            )
+
+
+    if st.session_state.ai_analysis:
+
+        st.markdown(
+            st.session_state.ai_analysis
+        )
+
+else:
+
+    st.info(
+        "Analyze a protein first to use the AI Research Assistant."
+    )
