@@ -126,6 +126,7 @@ if st.button("🔍 Analyze Protein"):
 
     st.session_state.protein = protein
 
+
     # ======================================
     # STRUCTURE: PDB FIRST
     # ======================================
@@ -170,6 +171,7 @@ if st.button("🔍 Analyze Protein"):
                 "page_url": None
             }
 
+
     # ======================================
     # FOLDSEEK
     # ======================================
@@ -185,6 +187,7 @@ if st.button("🔍 Analyze Protein"):
             "with Foldseek..."
         ):
 
+            # KEEP THIS EXACTLY AS IT WAS
             foldseek_results = search_foldseek(
                 structure["structure_url"],
                 protein_id,
@@ -194,6 +197,7 @@ if st.button("🔍 Analyze Protein"):
         st.session_state.foldseek_results = (
             foldseek_results
         )
+
 
         # ==================================
         # ANNOTATE FOLDSEEK HITS
@@ -368,6 +372,7 @@ if protein:
                     structure["page_url"]
                 )
 
+
         elif source == "AlphaFold":
 
             st.info(
@@ -406,6 +411,7 @@ if protein:
             show_structure(
                 structure["structure_url"]
             )
+
 
     else:
 
@@ -447,8 +453,9 @@ if protein:
                 f"### Hit {i}: {target}"
             )
 
+
             # ==================================
-            # FIRST ROW OF FOLDSEEK METRICS
+            # FOLDSEEK METRICS — ROW 1
             # ==================================
 
             c1, c2, c3 = st.columns(3)
@@ -483,8 +490,9 @@ if protein:
                     )
                 )
 
+
             # ==================================
-            # SECOND ROW OF FOLDSEEK METRICS
+            # FOLDSEEK METRICS — ROW 2
             # ==================================
 
             c4, c5, c6 = st.columns(3)
@@ -548,6 +556,7 @@ if protein:
                 )
             )
 
+
             hit_function = hit.get(
                 "function",
                 "Not available"
@@ -574,6 +583,7 @@ if protein:
             "Foldseek hits were found, but their "
             "functional annotations could not be retrieved."
         )
+
 
     else:
 
@@ -663,6 +673,7 @@ if uploaded_file:
                     f"{row['Adjusted P-value']:.4f}"
                 )
 
+
             st.subheader(
                 "📊 Volcano Plot"
             )
@@ -682,6 +693,7 @@ if uploaded_file:
                 x="Log2 Fold Change",
                 y="-log10 Adjusted P-value"
             )
+
 
     except Exception as e:
 
@@ -730,11 +742,13 @@ if protein:
                 )
             )
 
+
     if st.session_state.ai_analysis:
 
         st.markdown(
             st.session_state.ai_analysis
         )
+
 
 else:
 
