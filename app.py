@@ -1,23 +1,18 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
 from modules.uniprot import get_protein_info
 from modules.alphafold import get_alphafold_info
 from modules.structure import get_pdb_structure
 from modules.foldseek import search_foldseek
 from modules.hit_annotation import get_hit_annotation
-from modules.biomarker import analyze_biomarkers, get_gene_evidence
+from modules.biomarker import analyze_single_protein
 from modules.ai_assistant import generate_protein_analysis
 from modules.structure_viewer import show_structure
 
 
-# ==========================================
-# PAGE
-# ==========================================
-
 st.set_page_config(
-    page_title="AI Omics & Protein Assistant",
+    page_title="AI Omics & Protein Intelligence Assistant",
     page_icon="🧬",
     layout="wide"
 )
@@ -33,8 +28,9 @@ defaults = {
     "alphafold": None,
     "foldseek_results": None,
     "annotated_hits": None,
-    "biomarker_results": None,
-    "ai_analysis": None
+    "biomarker_result": None,
+    "ai_analysis": None,
+    "protein_id": None
 }
 
 for key, value in defaults.items():
@@ -53,7 +49,7 @@ st.title(
 st.write(
     "An AI-assisted platform for protein analysis, "
     "structural analysis, functional annotation, "
-    "and biomarker discovery."
+    "and biomarker investigation."
 )
 
 
@@ -62,7 +58,6 @@ st.write(
 # ==========================================
 
 st.sidebar.title("Analysis Modules")
-
 st.sidebar.write("🧬 Protein Information")
 st.sidebar.write("🧊 Structure Analysis")
 st.sidebar.write("🔎 Foldseek Similarity")
@@ -71,7 +66,7 @@ st.sidebar.write("🤖 AI Research Assistant")
 
 
 # ==========================================
-# PROTEIN INPUT
+# PROTEIN SEARCH
 # ==========================================
 
 st.header("🧬 Protein Analysis")
@@ -84,57 +79,39 @@ protein_id = st.text_input(
 
 if st.button("🔍 Analyze Protein"):
 
-    if not protein_id:
-
-        st.warning(
-            "Please enter a UniProt / TrEMBL ID."
-        )
-
+    if not protein_id.strip():
+        st.warning("Please enter a protein ID.")
         st.stop()
 
     protein_id = protein_id.strip().upper()
 
-    # Reset previous results
-
-    st.session_state.structure = None
-    st.session_state.alphafold = None
-    st.session_state.foldseek_results = None
-    st.session_state.annotated_hits = None
+    st.session_state.protein_id = protein_id
     st.session_state.ai_analysis = None
+    st.session_state.biomarker_result = None
 
-    # ======================================
-    # UNIPROT
-    # ======================================
+    # --------------------------------------
+    # UniProt
+    # --------------------------------------
 
     with st.spinner(
         "Fetching UniProt information..."
     ):
-
-        protein = get_protein_info(
-            protein_id
-        )
+        protein = get_protein_info(protein_id)
 
     if protein is None:
-
-        st.error(
-            "Protein ID not found."
-        )
-
+        st.error("Protein ID not found.")
         st.session_state.protein = None
-
         st.stop()
 
     st.session_state.protein = protein
 
-
-    # ======================================
-    # STRUCTURE: PDB FIRST
-    # ======================================
+    # --------------------------------------
+    # Structure
+    # --------------------------------------
 
     with st.spinner(
-        "Searching for experimental PDB structure..."
+        "Searching for experimental structure..."
     ):
-
         pdb_structure = get_pdb_structure(
             protein_id
         )
@@ -142,25 +119,21 @@ if st.button("🔍 Analyze Protein"):
     if pdb_structure:
 
         st.session_state.structure = pdb_structure
+        st.session_state.alphafold = None
 
     else:
 
-        # ==================================
-        # ALPHAFOLD FALLBACK
-        # ==================================
-
         with st.spinner(
-            "No suitable PDB structure found. "
+            "No PDB structure found. "
             "Fetching AlphaFold prediction..."
         ):
-
             alphafold = get_alphafold_info(
                 protein_id
             )
 
-        if alphafold:
+        st.session_state.alphafold = alphafold
 
-            st.session_state.alphafold = alphafold
+        if alphafold:
 
             st.session_state.structure = {
                 "source": "AlphaFold",
@@ -171,55 +144,33 @@ if st.button("🔍 Analyze Protein"):
                 "page_url": None
             }
 
+        else:
+            st.session_state.structure = None
 
-    # ======================================
-    # FOLDSEEK
-    # ======================================
+    # --------------------------------------
+    # Foldseek
+    # --------------------------------------
+
+    st.session_state.foldseek_results = None
+    st.session_state.annotated_hits = None
 
     structure = st.session_state.structure
 
-    if structure and structure.get(
-        "structure_url"
-    ):
+    if structure and structure.get("structure_url"):
 
         with st.spinner(
-            "Searching structural similarities "
-            "with Foldseek..."
+            "Searching structural similarities with Foldseek..."
         ):
 
-            try:
-
-                foldseek_results = search_foldseek(
-                    structure["structure_url"],
-                    protein_id,
-                    max_results=5
-                )
-
-            except Exception as e:
-
-                st.warning(
-                    f"Foldseek search failed: {e}"
-                )
-
-                foldseek_results = None
-
-        if foldseek_results is None:
-
-            st.info(
-                "Foldseek returned no results. This can "
-                "happen if the search server is busy, "
-                "the structure could not be downloaded, "
-                "or the search timed out."
+            foldseek_results = search_foldseek(
+                structure["structure_url"],
+                protein_id,
+                max_results=5
             )
 
         st.session_state.foldseek_results = (
             foldseek_results
         )
-
-
-        # ==================================
-        # ANNOTATE FOLDSEEK HITS
-        # ==================================
 
         if foldseek_results:
 
@@ -231,14 +182,10 @@ if st.button("🔍 Analyze Protein"):
                     hit.get("target")
                 )
 
-                combined_hit = {
+                annotated_hits.append({
                     **hit,
                     **annotation
-                }
-
-                annotated_hits.append(
-                    combined_hit
-                )
+                })
 
             st.session_state.annotated_hits = (
                 annotated_hits
@@ -254,18 +201,9 @@ if st.button("🔍 Analyze Protein"):
 # ==========================================
 
 protein = st.session_state.protein
-
 structure = st.session_state.structure
-
 alphafold = st.session_state.alphafold
-
-foldseek_results = (
-    st.session_state.foldseek_results
-)
-
-annotated_hits = (
-    st.session_state.annotated_hits
-)
+annotated_hits = st.session_state.annotated_hits
 
 
 # ==========================================
@@ -274,14 +212,11 @@ annotated_hits = (
 
 if protein:
 
-    st.subheader(
-        "🧬 Protein Information"
-    )
+    st.subheader("🧬 Protein Information")
 
     col1, col2 = st.columns(2)
 
     with col1:
-
         st.write(
             "**Protein ID:**",
             protein["protein_id"]
@@ -298,7 +233,6 @@ if protein:
         )
 
     with col2:
-
         st.write(
             "**Organism:**",
             protein["organism"]
@@ -315,20 +249,16 @@ if protein:
     # FUNCTION
     # ======================================
 
-    st.subheader(
-        "🔬 Functional Annotation"
-    )
+    st.subheader("🔬 Functional Annotation")
 
-    function = protein["function"]
-
-    if function != "Not available":
+    if protein["function"] != "Not available":
 
         st.success(
             "Curated UniProt functional annotation"
         )
 
         st.write(
-            function
+            protein["function"]
         )
 
     else:
@@ -338,21 +268,10 @@ if protein:
             "is currently available."
         )
 
-
-    # ======================================
-    # GO
-    # ======================================
-
-    st.write(
-        "**GO Terms:**"
-    )
+    st.write("**GO Terms:**")
 
     for go in protein["go_terms"]:
-
-        st.write(
-            "•",
-            go
-        )
+        st.write("•", go)
 
 
     st.divider()
@@ -362,36 +281,29 @@ if protein:
     # STRUCTURE
     # ======================================
 
-    st.subheader(
-        "🧊 Structure Analysis"
-    )
+    st.subheader("🧊 Structure Analysis")
 
     if structure:
 
-        source = structure.get(
-            "source"
-        )
-
-        if source == "PDB":
+        if structure.get("source") == "PDB":
 
             st.success(
-                "Experimental structure found in PDB."
+                "Experimental PDB structure found."
             )
 
             st.write(
                 "**PDB ID:**",
-                structure["pdb_id"]
+                structure.get("pdb_id")
             )
 
             if structure.get("page_url"):
-
                 st.link_button(
                     "🔗 Open PDB Entry",
                     structure["page_url"]
                 )
 
 
-        elif source == "AlphaFold":
+        elif structure.get("source") == "AlphaFold":
 
             st.info(
                 "No suitable experimental PDB structure "
@@ -408,19 +320,12 @@ if protein:
                     )
                 )
 
-                st.caption(
-                    "pLDDT represents AlphaFold's "
-                    "predicted local structural confidence."
-                )
 
+        # ----------------------------------
+        # 3D Viewer
+        # ----------------------------------
 
-        # ==================================
-        # 3D VIEWER
-        # ==================================
-
-        if structure.get(
-            "structure_url"
-        ):
+        if structure.get("structure_url"):
 
             st.subheader(
                 "🧊 Interactive 3D Structure"
@@ -430,12 +335,11 @@ if protein:
                 structure["structure_url"]
             )
 
-
     else:
 
         st.warning(
-            "No experimental or predicted "
-            "structure was available."
+            "No experimental or predicted structure "
+            "was available."
         )
 
 
@@ -462,24 +366,14 @@ if protein:
             start=1
         ):
 
-            target = hit.get(
-                "target",
-                "Unknown"
-            )
-
             st.markdown(
-                f"### Hit {i}: {target}"
+                f"### Hit {i}: "
+                f"{hit.get('target', 'Unknown')}"
             )
-
-
-            # ==================================
-            # FOLDSEEK METRICS — ROW 1
-            # ==================================
 
             c1, c2, c3 = st.columns(3)
 
             with c1:
-
                 st.write(
                     "**Sequence Identity:**",
                     hit.get(
@@ -489,7 +383,6 @@ if protein:
                 )
 
             with c2:
-
                 st.write(
                     "**E-value:**",
                     hit.get(
@@ -499,7 +392,6 @@ if protein:
                 )
 
             with c3:
-
                 st.write(
                     "**Alignment Length:**",
                     hit.get(
@@ -507,48 +399,6 @@ if protein:
                         "N/A"
                     )
                 )
-
-
-            # ==================================
-            # FOLDSEEK METRICS — ROW 2
-            # ==================================
-
-            c4, c5, c6 = st.columns(3)
-
-            with c4:
-
-                st.write(
-                    "**TM-score:**",
-                    hit.get(
-                        "tm_score",
-                        "N/A"
-                    )
-                )
-
-            with c5:
-
-                st.write(
-                    "**LDDT:**",
-                    hit.get(
-                        "lddt",
-                        "N/A"
-                    )
-                )
-
-            with c6:
-
-                st.write(
-                    "**Homology Probability:**",
-                    hit.get(
-                        "probability",
-                        "N/A"
-                    )
-                )
-
-
-            # ==================================
-            # HIT ANNOTATION
-            # ==================================
 
             st.write(
                 "**Hit UniProt ID:**",
@@ -574,58 +424,33 @@ if protein:
                 )
             )
 
-
-            hit_function = hit.get(
-                "function",
-                "Not available"
-            )
-
-            if hit_function != "Not available":
-
-                st.write(
-                    "**Expected Function:**",
-                    hit_function
-                )
-
-            else:
-
-                st.write(
-                    "**Expected Function:**",
+            st.write(
+                "**Expected Function:**",
+                hit.get(
+                    "function",
                     "Not available"
                 )
-
-
-    elif foldseek_results:
-
-        st.warning(
-            "Foldseek hits were found, but their "
-            "functional annotations could not be retrieved."
-        )
-
+            )
 
     else:
 
         st.warning(
-            "No Foldseek results returned."
+            "No Foldseek results available."
         )
-
-
-    st.divider()
 
 
 # ==========================================
 # BIOMARKER ANALYSIS
 # ==========================================
 
-st.header(
-    "📊 Biomarker Discovery"
-)
+st.divider()
+
+st.header("📊 Biomarker Evidence")
 
 st.write(
-    "Upload an expression dataset containing "
-    "multiple Healthy and Disease samples."
+    "Upload expression data and the application "
+    "will evaluate the specific protein searched above."
 )
-
 
 uploaded_file = st.file_uploader(
     "Upload expression CSV",
@@ -635,199 +460,109 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file:
 
-    try:
+    if not protein:
 
-        df = pd.read_csv(
-            uploaded_file
+        st.warning(
+            "Analyze a protein first."
         )
 
-        st.subheader(
-            "Uploaded Dataset"
-        )
+    else:
 
-        st.dataframe(
-            df,
-            use_container_width=True
-        )
+        try:
 
-        results = analyze_biomarkers(
-            df
-        )
-
-        if results is None:
-
-            st.error(
-                "CSV must contain Gene plus "
-                "at least two Healthy (H) and "
-                "two Disease (D) samples."
+            df = pd.read_csv(
+                uploaded_file
             )
-
-        else:
-
-            st.session_state.biomarker_results = (
-                results
-            )
-
-            # ==================================
-            # GENE-SPECIFIC EVIDENCE FOR THE
-            # PROTEIN CURRENTLY BEING ANALYZED
-            # ==================================
 
             st.subheader(
-                "🎯 Evidence for Selected Protein"
+                "Uploaded Expression Data"
             )
 
-            if protein is None:
+            st.dataframe(
+                df,
+                use_container_width=True
+            )
 
-                st.info(
-                    "Analyze a protein above first — "
-                    "biomarker evidence will then be "
-                    "matched to its gene automatically."
+            target_gene = protein.get(
+                "gene_name"
+            )
+
+            if not target_gene or target_gene == "Not available":
+
+                st.warning(
+                    "A gene name was not available "
+                    "for this protein."
                 )
 
             else:
 
-                target_gene = protein.get("gene_name")
-
-                gene_evidence = get_gene_evidence(
-                    results, target_gene
+                st.info(
+                    f"Checking biomarker evidence for "
+                    f"**{target_gene}**."
                 )
 
-                if target_gene in (None, "Not available"):
-
-                    st.warning(
-                        "No gene name is available for "
-                        f"{protein['protein_name']} "
-                        f"({protein['protein_id']}), so it "
-                        "can't be matched against this dataset."
+                biomarker_result = (
+                    analyze_single_protein(
+                        df,
+                        target_gene
                     )
+                )
 
-                elif gene_evidence is None:
+                st.session_state.biomarker_result = (
+                    biomarker_result
+                )
+
+                if biomarker_result is None:
 
                     st.warning(
-                        f"**{target_gene}** "
-                        f"({protein['protein_name']}) was not "
-                        "found in the uploaded dataset."
+                        f"{target_gene} was not found in "
+                        "the uploaded dataset, or there "
+                        "were insufficient samples."
                     )
 
                 else:
 
-                    candidate = gene_evidence.get(
-                        "Candidate"
-                    )
-
-                    st.write(
-                        f"**Gene:** {target_gene} "
-                        f"({protein['protein_name']})"
+                    st.subheader(
+                        "🧪 Protein-specific Biomarker Evidence"
                     )
 
                     c1, c2, c3 = st.columns(3)
 
                     with c1:
                         st.metric(
-                            "Healthy Mean",
-                            f"{gene_evidence['Healthy Mean']:.2f}"
+                            "Fold Change",
+                            f"{biomarker_result['fold_change']:.2f}"
                         )
 
                     with c2:
                         st.metric(
-                            "Disease Mean",
-                            f"{gene_evidence['Disease Mean']:.2f}"
+                            "Log₂ Fold Change",
+                            f"{biomarker_result['log2_fold_change']:.2f}"
                         )
 
                     with c3:
                         st.metric(
-                            "Fold Change",
-                            f"{gene_evidence['Fold Change']:.2f}"
+                            "P-value",
+                            f"{biomarker_result['p_value']:.4f}"
                         )
 
-                    c4, c5 = st.columns(2)
-
-                    with c4:
-                        st.metric(
-                            "Log2 Fold Change",
-                            f"{gene_evidence['Log2 Fold Change']:.2f}"
-                        )
-
-                    with c5:
-                        st.metric(
-                            "Adjusted P-value",
-                            f"{gene_evidence['Adjusted P-value']:.4f}"
-                        )
-
-                    if candidate == "Potential Candidate":
+                    if biomarker_result[
+                        "potential_biomarker"
+                    ]:
 
                         st.success(
-                            f"**{target_gene}** is flagged as a "
-                            "**potential biomarker candidate** "
-                            "based on this dataset."
+                            f"**{target_gene}** shows preliminary "
+                            "evidence consistent with a potential "
+                            "biomarker candidate."
                         )
 
                     else:
 
                         st.info(
-                            f"**{target_gene}** does not meet the "
-                            "fold-change / significance thresholds "
-                            "in this dataset."
+                            f"**{target_gene}** does not meet "
+                            "the current preliminary biomarker "
+                            "criteria."
                         )
-
-            st.divider()
-
-
-            # ==================================
-            # FULL DATASET (all genes, for context)
-            # ==================================
-
-            st.subheader(
-                "🧪 Biomarker Candidates (All Genes)"
-            )
-
-            st.dataframe(
-                results,
-                use_container_width=True
-            )
-
-            st.subheader(
-                "🏆 Top Candidates (All Genes)"
-            )
-
-            for _, row in results.head(5).iterrows():
-
-                st.write(
-                    f"**{row['Gene']}** — "
-                    f"Fold Change: "
-                    f"{row['Fold Change']:.2f} | "
-                    f"Adjusted P-value: "
-                    f"{row['Adjusted P-value']:.4f}"
-                )
-
-
-            st.subheader(
-                "📊 Volcano Plot"
-            )
-
-            plot_data = results.copy()
-
-            plot_data[
-                "-log10 Adjusted P-value"
-            ] = -np.log10(
-                plot_data[
-                    "Adjusted P-value"
-                ] + 1e-300
-            )
-
-            st.scatter_chart(
-                plot_data,
-                x="Log2 Fold Change",
-                y="-log10 Adjusted P-value"
-            )
-
-
-    except Exception as e:
-
-        st.error(
-            f"Error processing file: {e}"
-        )
 
 
 # ==========================================
@@ -841,9 +576,8 @@ st.header(
 )
 
 st.write(
-    "Generate an integrated interpretation "
-    "using protein, structural, functional, "
-    "Foldseek and biomarker evidence."
+    "Generate an integrated interpretation using "
+    "protein, structural, Foldseek, and biomarker evidence."
 )
 
 
@@ -854,18 +588,16 @@ if protein:
     ):
 
         with st.spinner(
-            "Generating integrated research analysis..."
+            "Generating research interpretation..."
         ):
 
             st.session_state.ai_analysis = (
                 generate_protein_analysis(
                     protein=protein,
                     alphafold=alphafold,
-                    foldseek_results=(
-                        annotated_hits
-                    ),
+                    foldseek_results=annotated_hits,
                     biomarker_results=(
-                        st.session_state.biomarker_results
+                        st.session_state.biomarker_result
                     )
                 )
             )
@@ -876,7 +608,6 @@ if protein:
         st.markdown(
             st.session_state.ai_analysis
         )
-
 
 else:
 
