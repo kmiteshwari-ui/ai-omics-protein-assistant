@@ -38,7 +38,6 @@ defaults = {
 }
 
 for key, value in defaults.items():
-
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -93,9 +92,7 @@ if st.button("🔍 Analyze Protein"):
 
         st.stop()
 
-
     protein_id = protein_id.strip().upper()
-
 
     # Reset previous results
 
@@ -104,7 +101,6 @@ if st.button("🔍 Analyze Protein"):
     st.session_state.foldseek_results = None
     st.session_state.annotated_hits = None
     st.session_state.ai_analysis = None
-
 
     # ======================================
     # UNIPROT
@@ -118,7 +114,6 @@ if st.button("🔍 Analyze Protein"):
             protein_id
         )
 
-
     if protein is None:
 
         st.error(
@@ -129,9 +124,7 @@ if st.button("🔍 Analyze Protein"):
 
         st.stop()
 
-
     st.session_state.protein = protein
-
 
     # ======================================
     # STRUCTURE: PDB FIRST
@@ -144,7 +137,6 @@ if st.button("🔍 Analyze Protein"):
         pdb_structure = get_pdb_structure(
             protein_id
         )
-
 
     if pdb_structure:
 
@@ -165,7 +157,6 @@ if st.button("🔍 Analyze Protein"):
                 protein_id
             )
 
-
         if alphafold:
 
             st.session_state.alphafold = alphafold
@@ -179,13 +170,11 @@ if st.button("🔍 Analyze Protein"):
                 "page_url": None
             }
 
-
     # ======================================
     # FOLDSEEK
     # ======================================
 
     structure = st.session_state.structure
-
 
     if structure and structure.get(
         "structure_url"
@@ -205,7 +194,6 @@ if st.button("🔍 Analyze Protein"):
         st.session_state.foldseek_results = (
             foldseek_results
         )
-
 
         # ==================================
         # ANNOTATE FOLDSEEK HITS
@@ -233,7 +221,6 @@ if st.button("🔍 Analyze Protein"):
             st.session_state.annotated_hits = (
                 annotated_hits
             )
-
 
     st.success(
         "Protein analysis completed!"
@@ -271,7 +258,6 @@ if protein:
 
     col1, col2 = st.columns(2)
 
-
     with col1:
 
         st.write(
@@ -288,7 +274,6 @@ if protein:
             "**Gene Name:**",
             protein["gene_name"]
         )
-
 
     with col2:
 
@@ -313,7 +298,6 @@ if protein:
     )
 
     function = protein["function"]
-
 
     if function != "Not available":
 
@@ -360,13 +344,11 @@ if protein:
         "🧊 Structure Analysis"
     )
 
-
     if structure:
 
         source = structure.get(
             "source"
         )
-
 
         if source == "PDB":
 
@@ -385,7 +367,6 @@ if protein:
                     "🔗 Open PDB Entry",
                     structure["page_url"]
                 )
-
 
         elif source == "AlphaFold":
 
@@ -426,7 +407,6 @@ if protein:
                 structure["structure_url"]
             )
 
-
     else:
 
         st.warning(
@@ -446,14 +426,12 @@ if protein:
         "🔎 Structural Similarity — Foldseek"
     )
 
-
     if annotated_hits:
 
         st.success(
             f"Found {len(annotated_hits)} "
             "structural hits."
         )
-
 
         for i, hit in enumerate(
             annotated_hits,
@@ -465,14 +443,15 @@ if protein:
                 "Unknown"
             )
 
-
             st.markdown(
                 f"### Hit {i}: {target}"
             )
 
+            # ==================================
+            # FIRST ROW OF FOLDSEEK METRICS
+            # ==================================
 
             c1, c2, c3 = st.columns(3)
-
 
             with c1:
 
@@ -484,7 +463,6 @@ if protein:
                     )
                 )
 
-
             with c2:
 
                 st.write(
@@ -494,7 +472,6 @@ if protein:
                         "N/A"
                     )
                 )
-
 
             with c3:
 
@@ -506,10 +483,46 @@ if protein:
                     )
                 )
 
+            # ==================================
+            # SECOND ROW OF FOLDSEEK METRICS
+            # ==================================
 
-            # ------------------------------
-            # Hit annotation
-            # ------------------------------
+            c4, c5, c6 = st.columns(3)
+
+            with c4:
+
+                st.write(
+                    "**TM-score:**",
+                    hit.get(
+                        "tm_score",
+                        "N/A"
+                    )
+                )
+
+            with c5:
+
+                st.write(
+                    "**LDDT:**",
+                    hit.get(
+                        "lddt",
+                        "N/A"
+                    )
+                )
+
+            with c6:
+
+                st.write(
+                    "**Homology Probability:**",
+                    hit.get(
+                        "probability",
+                        "N/A"
+                    )
+                )
+
+
+            # ==================================
+            # HIT ANNOTATION
+            # ==================================
 
             st.write(
                 "**Hit UniProt ID:**",
@@ -519,7 +532,6 @@ if protein:
                 )
             )
 
-
             st.write(
                 "**Hit Protein:**",
                 hit.get(
@@ -527,7 +539,6 @@ if protein:
                     "Not available"
                 )
             )
-
 
             st.write(
                 "**Hit Organism:**",
@@ -537,12 +548,10 @@ if protein:
                 )
             )
 
-
             hit_function = hit.get(
                 "function",
                 "Not available"
             )
-
 
             if hit_function != "Not available":
 
@@ -565,7 +574,6 @@ if protein:
             "Foldseek hits were found, but their "
             "functional annotations could not be retrieved."
         )
-
 
     else:
 
@@ -605,7 +613,6 @@ if uploaded_file:
             uploaded_file
         )
 
-
         st.subheader(
             "Uploaded Dataset"
         )
@@ -615,11 +622,9 @@ if uploaded_file:
             use_container_width=True
         )
 
-
         results = analyze_biomarkers(
             df
         )
-
 
         if results is None:
 
@@ -629,13 +634,11 @@ if uploaded_file:
                 "two Disease (D) samples."
             )
 
-
         else:
 
             st.session_state.biomarker_results = (
                 results
             )
-
 
             st.subheader(
                 "🧪 Biomarker Candidates"
@@ -646,11 +649,9 @@ if uploaded_file:
                 use_container_width=True
             )
 
-
             st.subheader(
                 "🏆 Top Candidates"
             )
-
 
             for _, row in results.head(5).iterrows():
 
@@ -662,14 +663,11 @@ if uploaded_file:
                     f"{row['Adjusted P-value']:.4f}"
                 )
 
-
             st.subheader(
                 "📊 Volcano Plot"
             )
 
-
             plot_data = results.copy()
-
 
             plot_data[
                 "-log10 Adjusted P-value"
@@ -679,13 +677,11 @@ if uploaded_file:
                 ] + 1e-300
             )
 
-
             st.scatter_chart(
                 plot_data,
                 x="Log2 Fold Change",
                 y="-log10 Adjusted P-value"
             )
-
 
     except Exception as e:
 
@@ -703,7 +699,6 @@ st.divider()
 st.header(
     "🤖 AI Research Assistant"
 )
-
 
 st.write(
     "Generate an integrated interpretation "
@@ -735,13 +730,11 @@ if protein:
                 )
             )
 
-
     if st.session_state.ai_analysis:
 
         st.markdown(
             st.session_state.ai_analysis
         )
-
 
 else:
 
