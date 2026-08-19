@@ -15,6 +15,27 @@ st.set_page_config(
 )
 
 
+# ==========================================
+# SESSION STATE
+# ==========================================
+
+if "protein" not in st.session_state:
+    st.session_state.protein = None
+
+if "alphafold" not in st.session_state:
+    st.session_state.alphafold = None
+
+if "foldseek_results" not in st.session_state:
+    st.session_state.foldseek_results = None
+
+if "ai_analysis" not in st.session_state:
+    st.session_state.ai_analysis = None
+
+
+# ==========================================
+# HEADER
+# ==========================================
+
 st.title("🧬 AI Omics & Protein Intelligence Assistant")
 
 st.write(
@@ -24,7 +45,12 @@ st.write(
 )
 
 
+# ==========================================
+# SIDEBAR
+# ==========================================
+
 st.sidebar.title("Analysis Modules")
+
 st.sidebar.write("🧬 Protein Information")
 st.sidebar.write("🧊 AlphaFold Structure")
 st.sidebar.write("🔎 Foldseek Similarity")
@@ -49,28 +75,78 @@ if st.button("🔍 Analyze Protein"):
     if not protein_id:
 
         st.warning("Please enter a protein ID.")
-        st.stop()
 
-    protein_id = protein_id.strip().upper()
+    else:
 
+        protein_id = protein_id.strip().upper()
+
+        # Reset previous AI response
+        st.session_state.ai_analysis = None
+
+        # -------------------------
+        # UniProt
+        # -------------------------
+
+        with st.spinner("Fetching UniProt information..."):
+
+            protein = get_protein_info(protein_id)
+
+        if protein is None:
+
+            st.error("Protein ID not found.")
+
+            st.session_state.protein = None
+
+        else:
+
+            st.session_state.protein = protein
+
+            st.success(
+                "Protein information retrieved!"
+            )
+
+            # -------------------------
+            # AlphaFold
+            # -------------------------
+
+            with st.spinner(
+                "Fetching AlphaFold information..."
+            ):
+
+                st.session_state.alphafold = (
+                    get_alphafold_info(protein_id)
+                )
+
+            # -------------------------
+            # Foldseek
+            # -------------------------
+
+            with st.spinner(
+                "Searching structural databases with Foldseek..."
+            ):
+
+                st.session_state.foldseek_results = (
+                    search_foldseek(
+                        protein_id,
+                        max_results=5
+                    )
+                )
+
+
+# ==========================================
+# DISPLAY PROTEIN RESULTS
+# ==========================================
+
+protein = st.session_state.protein
+alphafold = st.session_state.alphafold
+foldseek_results = st.session_state.foldseek_results
+
+
+if protein:
 
     # ======================================
-    # UNIPROT
+    # PROTEIN INFORMATION
     # ======================================
-
-    with st.spinner("Fetching UniProt information..."):
-
-        protein = get_protein_info(protein_id)
-
-
-    if protein is None:
-
-        st.error("Protein ID not found.")
-        st.stop()
-
-
-    st.success("Protein information retrieved!")
-
 
     st.subheader("🧬 Protein Information")
 
@@ -92,7 +168,6 @@ if st.button("🔍 Analyze Protein"):
             "**Gene Name:**",
             protein["gene_name"]
         )
-
 
     with col2:
 
@@ -135,22 +210,12 @@ if st.button("🔍 Analyze Protein"):
 
     st.subheader("🧊 AlphaFold Structure")
 
-    with st.spinner(
-        "Fetching AlphaFold information..."
-    ):
-
-        alphafold = get_alphafold_info(
-            protein_id
-        )
-
-
     if alphafold:
 
         st.write(
             "**pLDDT Score:**",
             alphafold["plddt"]
         )
-
 
         if alphafold.get("pdb_url"):
 
@@ -159,14 +224,12 @@ if st.button("🔍 Analyze Protein"):
                 alphafold["pdb_url"]
             )
 
-
         if alphafold.get("pae_image"):
 
             st.image(
                 alphafold["pae_image"],
-                caption="AlphaFold PAE"
+                caption="AlphaFold Predicted Aligned Error"
             )
-
 
     else:
 
@@ -186,23 +249,12 @@ if st.button("🔍 Analyze Protein"):
         "🔎 Structural Similarity — Foldseek"
     )
 
-    with st.spinner(
-        "Searching structural databases..."
-    ):
-
-        foldseek_results = search_foldseek(
-            protein_id,
-            max_results=5
-        )
-
-
     if foldseek_results:
 
         st.success(
             f"Found {len(foldseek_results)} "
             "structural hits."
         )
-
 
         for i, hit in enumerate(
             foldseek_results,
@@ -226,7 +278,6 @@ if st.button("🔍 Analyze Protein"):
                     )
                 )
 
-
             with c2:
 
                 st.write(
@@ -237,7 +288,6 @@ if st.button("🔍 Analyze Protein"):
                     )
                 )
 
-
             with c3:
 
                 st.write(
@@ -247,7 +297,6 @@ if st.button("🔍 Analyze Protein"):
                         "N/A"
                     )
                 )
-
 
     else:
 
@@ -268,27 +317,31 @@ if st.button("🔍 Analyze Protein"):
     )
 
     st.write(
-        "Generate an AI-assisted interpretation "
-        "of the protein and structural evidence."
+        "Generate an interpretation using "
+        "the protein, structural and functional evidence."
     )
 
 
-    if st.button(
-        "🧠 Generate AI Analysis"
-    ):
+    if st.button("🧠 Generate AI Analysis"):
 
         with st.spinner(
-            "AI is analyzing the results..."
+            "Generating research interpretation..."
         ):
 
-            analysis = generate_protein_analysis(
-                protein,
-                alphafold,
-                foldseek_results
+            st.session_state.ai_analysis = (
+                generate_protein_analysis(
+                    protein,
+                    alphafold,
+                    foldseek_results
+                )
             )
 
 
-        st.markdown(analysis)
+    if st.session_state.ai_analysis:
+
+        st.markdown(
+            st.session_state.ai_analysis
+        )
 
 
 # ==========================================
@@ -319,7 +372,6 @@ if uploaded_file:
             uploaded_file
         )
 
-
         st.subheader(
             "Uploaded Dataset"
         )
@@ -329,11 +381,9 @@ if uploaded_file:
             use_container_width=True
         )
 
-
         results = analyze_biomarkers(
             df
         )
-
 
         if results is None:
 
@@ -353,11 +403,9 @@ if uploaded_file:
                 use_container_width=True
             )
 
-
             st.subheader(
                 "🏆 Top Candidates"
             )
-
 
             for _, row in results.head(5).iterrows():
 
@@ -368,7 +416,6 @@ if uploaded_file:
                     f"Score: "
                     f"{row['Biomarker Score']:.1f}"
                 )
-
 
     except Exception as e:
 
