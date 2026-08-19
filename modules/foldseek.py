@@ -5,20 +5,34 @@ import time
 FOLDSEEK_URL = "https://search.foldseek.com/api"
 
 
-def get_alphafold_pdb(protein_id):
-    url = f"https://alphafold.ebi.ac.uk/files/AF-{protein_id}-F1-model_v6.pdb"
+def get_structure_content(structure_url):
+    """
+    Download structure file bytes (PDB format) from a given URL.
+    Works for both experimental PDB URLs and AlphaFold URLs.
+    """
 
-    response = requests.get(url, timeout=30)
+    try:
+        response = requests.get(structure_url, timeout=30)
 
-    if response.status_code != 200:
+        if response.status_code != 200:
+            return None
+
+        return response.content
+
+    except requests.RequestException:
         return None
 
-    return response.content
 
+def search_foldseek(structure_url, protein_id, max_results=5):
+    """
+    Run a Foldseek structural similarity search.
 
-def search_foldseek(protein_id, max_results=5):
+    structure_url: URL to the structure file to search with
+                    (either an experimental PDB or an AlphaFold model).
+    protein_id:    used only for labeling the uploaded query file.
+    """
 
-    pdb_content = get_alphafold_pdb(protein_id)
+    pdb_content = get_structure_content(structure_url)
 
     if not pdb_content:
         return None
@@ -26,7 +40,7 @@ def search_foldseek(protein_id, max_results=5):
     # Submit structure
     files = {
         "q": (
-            f"AF-{protein_id}.pdb",
+            f"{protein_id}.pdb",
             pdb_content,
             "application/octet-stream"
         )
@@ -37,17 +51,24 @@ def search_foldseek(protein_id, max_results=5):
         ("database[]", "pdb100")
     ]
 
-    response = requests.post(
-        f"{FOLDSEEK_URL}/ticket",
-        files=files,
-        data=data,
-        timeout=60
-    )
+    try:
+        response = requests.post(
+            f"{FOLDSEEK_URL}/ticket",
+            files=files,
+            data=data,
+            timeout=60
+        )
+    except requests.RequestException:
+        return None
 
     if response.status_code != 200:
         return None
 
-    ticket = response.json()
+    try:
+        ticket = response.json()
+    except ValueError:
+        return None
+
     ticket_id = ticket.get("id")
 
     if not ticket_id:
@@ -56,15 +77,21 @@ def search_foldseek(protein_id, max_results=5):
     # Poll until complete
     for _ in range(30):
 
-        status_response = requests.get(
-            f"{FOLDSEEK_URL}/ticket/{ticket_id}",
-            timeout=30
-        )
+        try:
+            status_response = requests.get(
+                f"{FOLDSEEK_URL}/ticket/{ticket_id}",
+                timeout=30
+            )
+        except requests.RequestException:
+            return None
 
         if status_response.status_code != 200:
             return None
 
-        status = status_response.json().get("status")
+        try:
+            status = status_response.json().get("status")
+        except ValueError:
+            return None
 
         if status == "ERROR":
             return None
@@ -75,18 +102,25 @@ def search_foldseek(protein_id, max_results=5):
         time.sleep(3)
 
     else:
+        # Loop finished without breaking -> timed out
         return None
 
     # Get results
-    result_response = requests.get(
-        f"{FOLDSEEK_URL}/result/{ticket_id}/0",
-        timeout=60
-    )
+    try:
+        result_response = requests.get(
+            f"{FOLDSEEK_URL}/result/{ticket_id}/0",
+            timeout=60
+        )
+    except requests.RequestException:
+        return None
 
     if result_response.status_code != 200:
         return None
 
-    result_data = result_response.json()
+    try:
+        result_data = result_response.json()
+    except ValueError:
+        return None
 
     return parse_results(result_data, max_results)
 
