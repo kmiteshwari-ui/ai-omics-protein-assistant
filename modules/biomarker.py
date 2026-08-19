@@ -113,3 +113,33 @@ def analyze_biomarkers(df):
     )
 
     return results
+
+
+def get_gene_evidence(results, gene_name):
+    """
+    Look up expression / biomarker evidence for ONE specific gene
+    within the full biomarker results table — used to tie the
+    uploaded expression dataset back to the protein currently
+    being searched (via its UniProt gene name).
+
+    Returns a dict of that gene's row (Healthy Mean, Disease Mean,
+    Fold Change, Log2 Fold Change, P-value, Adjusted P-value,
+    Biomarker Score, Candidate), or None if the gene isn't present
+    in the uploaded dataset, or no gene name is available at all.
+    """
+
+    if results is None or results.empty:
+        return None
+
+    if not gene_name or gene_name == "Not available":
+        return None
+
+    matches = results[
+        results["Gene"].astype(str).str.strip().str.upper()
+        == str(gene_name).strip().upper()
+    ]
+
+    if matches.empty:
+        return None
+
+    return matches.iloc[0].to_dict()
