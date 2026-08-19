@@ -1,3 +1,6 @@
+from modules.biomarker import get_gene_evidence
+
+
 def generate_protein_analysis(
     protein,
     alphafold=None,
@@ -140,52 +143,78 @@ def generate_protein_analysis(
         )
 
     # ==========================================
-    # Biomarker analysis
+    # Biomarker analysis — tied to THIS protein's gene
     # ==========================================
 
     report.append("### 🧪 Biomarker Analysis")
 
-    if biomarker_results is not None and not biomarker_results.empty:
+    gene_name = protein.get("gene_name")
 
-        candidates = biomarker_results[
-            biomarker_results["Candidate"]
-            == "Potential Candidate"
-        ]
+    if biomarker_results is None or biomarker_results.empty:
 
-        if not candidates.empty:
+        report.append(
+            "No biomarker dataset has been analyzed yet."
+        )
 
-            report.append(
-                f"**{len(candidates)} potential biomarker "
-                f"candidates** were identified."
-            )
+    else:
 
-            for _, row in candidates.head(5).iterrows():
+        gene_evidence = get_gene_evidence(
+            biomarker_results, gene_name
+        )
 
-                report.append(
-                    f"- **{row['Gene']}** — "
-                    f"Log₂FC: {row['Log2 Fold Change']:.2f}, "
-                    f"Adjusted P-value: "
-                    f"{row['Adjusted P-value']:.4f}"
-                )
+        if gene_evidence is None:
 
             report.append(
-                "These candidates should be considered "
-                "research hypotheses rather than clinically "
-                "validated biomarkers."
+                f"The uploaded expression dataset does not "
+                f"contain data for **{gene_name}** "
+                f"({protein['protein_name']}), so no biomarker "
+                f"evidence is available for this specific protein "
+                f"from this dataset."
             )
 
         else:
 
             report.append(
-                "No statistically significant biomarker "
-                "candidates were identified."
+                f"Expression evidence for **{gene_name}** "
+                f"({protein['protein_name']}) was found in the "
+                f"uploaded dataset:"
             )
 
-    else:
+            report.append(
+                f"- Healthy Mean: "
+                f"**{gene_evidence['Healthy Mean']:.2f}**\n"
+                f"- Disease Mean: "
+                f"**{gene_evidence['Disease Mean']:.2f}**\n"
+                f"- Fold Change: "
+                f"**{gene_evidence['Fold Change']:.2f}**\n"
+                f"- Log₂ Fold Change: "
+                f"**{gene_evidence['Log2 Fold Change']:.2f}**\n"
+                f"- Adjusted P-value: "
+                f"**{gene_evidence['Adjusted P-value']:.4f}**"
+            )
 
-        report.append(
-            "No biomarker dataset has been analyzed yet."
-        )
+            if gene_evidence.get("Candidate") == "Potential Candidate":
+
+                report.append(
+                    f"**{gene_name}** meets the fold-change and "
+                    f"significance thresholds in this dataset and "
+                    f"is flagged as a **potential biomarker "
+                    f"candidate**."
+                )
+
+            else:
+
+                report.append(
+                    f"**{gene_name}** does not meet the "
+                    f"fold-change / significance thresholds in "
+                    f"this dataset, so it is not flagged as a "
+                    f"biomarker candidate here."
+                )
+
+            report.append(
+                "This should be considered a research hypothesis "
+                "rather than a clinically validated biomarker."
+            )
 
     # ==========================================
     # Recommendations
