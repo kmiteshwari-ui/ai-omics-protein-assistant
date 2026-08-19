@@ -7,6 +7,7 @@ from modules.alphafold import get_alphafold_info
 from modules.foldseek import search_foldseek
 from modules.biomarker import analyze_biomarkers
 from modules.ai_assistant import generate_protein_analysis
+from modules.structure_viewer import show_structure
 
 
 st.set_page_config(
@@ -206,11 +207,8 @@ if protein:
         )
 
         if alphafold.get("pdb_url"):
-
-            st.link_button(
-                "🔗 View AlphaFold Structure",
-                alphafold["pdb_url"]
-            )
+    st.subheader("🧊 Interactive 3D Structure")
+    show_structure(alphafold["pdb_url"])
 
         if alphafold.get("pae_image"):
 
