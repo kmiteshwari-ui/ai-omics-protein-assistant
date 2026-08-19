@@ -1,57 +1,87 @@
-import streamlit as st
-from modules.uniprot import get_protein_info
+import requests
 
-st.set_page_config(
-    page_title="AI Omics & Protein Assistant",
-    page_icon="🧬",
-    layout="wide"
-)
 
-st.title("🧬 AI Omics & Protein Intelligence Assistant")
-st.write(
-    "Analyze protein information and generate biological insights "
-    "using AI-assisted bioinformatics."
-)
+def get_protein_info(protein_id):
+    url = f"https://rest.uniprot.org/uniprotkb/{protein_id}.json"
 
-st.divider()
+    response = requests.get(url, timeout=15)
 
-protein_id = st.text_input(
-    "Enter UniProt / TrEMBL Protein ID",
-    placeholder="Example: P00722"
-)
+    if response.status_code != 200:
+        return None
 
-if st.button("🔍 Analyze Protein"):
+    data = response.json()
 
-    if not protein_id:
-        st.warning("Please enter a protein ID.")
+    # Protein name
+    protein_name = (
+        data.get("proteinDescription", {})
+        .get("recommendedName", {})
+        .get("fullName", {})
+        .get("value", "Not available")
+    )
 
-    else:
-        with st.spinner("Fetching protein information..."):
-            protein = get_protein_info(protein_id.strip())
+    # Organism
+    organism = data.get("organism", {}).get(
+        "scientificName", "Not available"
+    )
 
-        if protein is None:
-            st.error("Protein ID not found. Please check the ID.")
-        else:
-            st.success("Protein information retrieved successfully!")
+    # Sequence length
+    sequence = data.get("sequence", {})
+    length = sequence.get("length", "Not available")
 
-            st.subheader("🧬 Protein Information")
+    # Gene name
+    genes = data.get("genes", [])
+    gene_name = "Not available"
 
-            col1, col2 = st.columns(2)
+    if genes:
+        gene_name = (
+            genes[0]
+            .get("geneName", {})
+            .get("value", "Not available")
+        )
 
-            with col1:
-                st.write("**Protein ID:**", protein["protein_id"])
-                st.write("**Protein Name:**", protein["protein_name"])
-                st.write("**Organism:**", protein["organism"])
+    # Function
+    function = "Not available"
 
-            with col2:
-                st.write("**Length:**", protein["length"], "amino acids")
+    for comment in data.get("comments", []):
+        if comment.get("commentType") == "FUNCTION":
 
-            st.subheader("🔬 Function")
-            st.write(protein["function"])
+            texts = comment.get("texts", [])
 
-st.sidebar.title("Analysis Modules")
-st.sidebar.write("🧬 Protein Information")
-st.sidebar.write("🔬 Structure Analysis")
-st.sidebar.write("🧪 Functional Annotation")
-st.sidebar.write("📊 Biomarker Analysis")
-st.sidebar.write("🤖 AI Research Assistant")
+            if texts:
+                function = " ".join(
+                    text.get("value", "")
+                    for text in texts
+                    if text.get("value")
+                )
+
+            # Alternative format
+            if function == "Not available":
+                function = comment.get(
+                    "text", {}
+                ).get("value", "Not available")
+
+            break
+
+    # GO terms
+    go_terms = []
+
+    for reference in data.get("uniProtKBCrossReferences", []):
+        if reference.get("database") == "GO":
+            properties = reference.get("properties", [])
+
+            for prop in properties:
+                if prop.get("key") == "GoTerm":
+                    go_terms.append(prop.get("value"))
+
+    if not go_terms:
+        go_terms = ["Not available"]
+
+    return {
+        "protein_id": protein_id,
+        "protein_name": protein_name,
+        "gene_name": gene_name,
+        "organism": organism,
+        "length": length,
+        "function": function,
+        "go_terms": go_terms,
+    }
