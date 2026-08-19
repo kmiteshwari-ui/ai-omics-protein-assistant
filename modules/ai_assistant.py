@@ -1,4 +1,9 @@
-def generate_protein_analysis(protein, alphafold, foldseek_results):
+def generate_protein_analysis(
+    protein,
+    alphafold=None,
+    foldseek_results=None,
+    biomarker_results=None
+):
     report = []
 
     report.append("## 🤖 AI Research Assistant")
@@ -20,18 +25,19 @@ def generate_protein_analysis(protein, alphafold, foldseek_results):
 
     if protein["function"] != "Not available":
         report.append(
-            f"Based on UniProt annotation, this protein is "
-            f"associated with: {protein['function']}"
+            f"UniProt annotation indicates: "
+            f"{protein['function']}"
         )
     else:
         report.append(
-            "No curated functional description was available."
+            "No functional description is currently available."
         )
 
-    # AlphaFold interpretation
+    # AlphaFold
     report.append("### 🧊 Structural Evidence")
 
     if alphafold:
+
         plddt = alphafold.get("plddt")
 
         if plddt is not None:
@@ -41,74 +47,112 @@ def generate_protein_analysis(protein, alphafold, foldseek_results):
             )
 
         report.append(
-            "The predicted structure can be investigated "
-            "further using structural similarity analysis."
-        )
-    else:
-        report.append(
-            "AlphaFold structural information was not available."
+            "The predicted structure was further investigated "
+            "using structural similarity analysis."
         )
 
-    # Foldseek interpretation
+    else:
+        report.append(
+            "AlphaFold information was not available."
+        )
+
+    # Foldseek
     report.append("### 🔎 Foldseek Evidence")
 
     if foldseek_results:
 
         report.append(
-            f"Foldseek identified **{len(foldseek_results)} "
-            f"structural similarity hits**."
+            f"Foldseek identified "
+            f"**{len(foldseek_results)} structural hits**."
         )
 
         top_hit = foldseek_results[0]
 
-        target = top_hit.get("target", "Unknown")
-        evalue = top_hit.get("e_value", "N/A")
-        seqid = top_hit.get("sequence_identity", "N/A")
-
         report.append(
-            f"The top structural hit is **{target}**, "
-            f"with sequence identity of **{seqid}** "
-            f"and E-value of **{evalue}**."
+            f"The top structural hit is "
+            f"**{top_hit.get('target', 'Unknown')}**."
         )
 
         report.append(
-            "Structural similarity may provide evidence "
-            "for possible functional relationships, but "
-            "it should not be treated as definitive proof."
+            f"Sequence identity: "
+            f"**{top_hit.get('sequence_identity', 'N/A')}**."
+        )
+
+        report.append(
+            "Structural similarity can provide useful "
+            "evidence for possible functional relationships, "
+            "but it does not by itself prove function."
         )
 
     else:
         report.append(
-            "No Foldseek structural hits were available."
+            "No Foldseek hits were available."
         )
 
-    # Biomarker interpretation
-    report.append("### 🧪 Biomarker Perspective")
+    # Biomarker analysis
+    report.append("### 🧪 Biomarker Analysis")
 
-    report.append(
-        "This protein could be considered for further "
-        "biomarker investigation if it shows consistent "
-        "differential expression between disease and "
-        "healthy samples."
-    )
+    if biomarker_results is not None and not biomarker_results.empty:
 
-    # Next steps
+        candidates = biomarker_results[
+            biomarker_results["Candidate"]
+            == "Potential Candidate"
+        ]
+
+        if not candidates.empty:
+
+            report.append(
+                f"**{len(candidates)} potential biomarker "
+                f"candidates** were identified."
+            )
+
+            for _, row in candidates.head(5).iterrows():
+
+                report.append(
+                    f"- **{row['Gene']}** — "
+                    f"Log₂FC: {row['Log2 Fold Change']:.2f}, "
+                    f"Adjusted P-value: "
+                    f"{row['Adjusted P-value']:.4f}"
+                )
+
+            report.append(
+                "These candidates should be considered "
+                "research hypotheses rather than clinically "
+                "validated biomarkers."
+            )
+
+        else:
+
+            report.append(
+                "No statistically significant biomarker "
+                "candidates were identified."
+            )
+
+    else:
+
+        report.append(
+            "No biomarker dataset has been analyzed yet."
+        )
+
+    # Recommendations
     report.append("### 🔬 Recommended Next Steps")
 
     report.append(
-        "1. Compare expression between disease and healthy samples."
+        "1. Investigate the strongest structural similarity hits."
     )
 
     report.append(
-        "2. Investigate relevant GO terms and pathways."
+        "2. Examine relevant GO terms and biological pathways."
     )
 
     report.append(
-        "3. Examine the strongest Foldseek structural hits."
+        "3. Validate promising biomarker candidates "
+        "using an independent dataset."
     )
 
     report.append(
-        "4. Validate promising candidates using an independent dataset."
+        "4. Consider experimental validation before "
+        "drawing clinical conclusions."
     )
 
     return "\n\n".join(report)
