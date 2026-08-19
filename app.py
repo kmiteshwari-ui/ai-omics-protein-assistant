@@ -1,4 +1,5 @@
 import streamlit as st
+from modules.uniprot import get_protein_info
 
 st.set_page_config(
     page_title="AI Omics & Protein Assistant",
@@ -20,11 +21,33 @@ protein_id = st.text_input(
 )
 
 if st.button("🔍 Analyze Protein"):
-    if protein_id:
-        st.success(f"Protein ID received: {protein_id}")
-        st.info("Protein analysis module will be connected next.")
-    else:
+
+    if not protein_id:
         st.warning("Please enter a protein ID.")
+
+    else:
+        with st.spinner("Fetching protein information..."):
+            protein = get_protein_info(protein_id.strip())
+
+        if protein is None:
+            st.error("Protein ID not found. Please check the ID.")
+        else:
+            st.success("Protein information retrieved successfully!")
+
+            st.subheader("🧬 Protein Information")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write("**Protein ID:**", protein["protein_id"])
+                st.write("**Protein Name:**", protein["protein_name"])
+                st.write("**Organism:**", protein["organism"])
+
+            with col2:
+                st.write("**Length:**", protein["length"], "amino acids")
+
+            st.subheader("🔬 Function")
+            st.write(protein["function"])
 
 st.sidebar.title("Analysis Modules")
 st.sidebar.write("🧬 Protein Information")
