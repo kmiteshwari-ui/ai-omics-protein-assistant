@@ -457,67 +457,51 @@ uploaded_file = st.file_uploader(
     type=["csv"]
 )
 
-
 if uploaded_file:
 
     if not protein:
 
-        st.warning(
-            "Analyze a protein first."
-        )
+        st.warning("Analyze a protein first.")
 
     else:
 
         try:
 
-            df = pd.read_csv(
-                uploaded_file
-            )
+            df = pd.read_csv(uploaded_file)
 
-            st.subheader(
-                "Uploaded Expression Data"
-            )
+            st.subheader("Uploaded Expression Data")
 
             st.dataframe(
                 df,
                 use_container_width=True
             )
 
-            target_gene = protein.get(
-                "gene_name"
-            )
+            target_gene = protein.get("gene_name")
 
             if not target_gene or target_gene == "Not available":
 
                 st.warning(
-                    "A gene name was not available "
-                    "for this protein."
+                    "A gene name was not available for this protein."
                 )
 
             else:
 
                 st.info(
-                    f"Checking biomarker evidence for "
-                    f"**{target_gene}**."
+                    f"Checking biomarker evidence for **{target_gene}**."
                 )
 
-                biomarker_result = (
-                    analyze_single_protein(
-                        df,
-                        target_gene
-                    )
+                biomarker_result = analyze_single_protein(
+                    df,
+                    target_gene
                 )
 
-                st.session_state.biomarker_result = (
-                    biomarker_result
-                )
+                st.session_state.biomarker_result = biomarker_result
 
                 if biomarker_result is None:
 
                     st.warning(
-                        f"{target_gene} was not found in "
-                        "the uploaded dataset, or there "
-                        "were insufficient samples."
+                        f"{target_gene} was not found in the uploaded "
+                        "dataset, or there were insufficient samples."
                     )
 
                 else:
@@ -546,9 +530,7 @@ if uploaded_file:
                             f"{biomarker_result['p_value']:.4f}"
                         )
 
-                    if biomarker_result[
-                        "potential_biomarker"
-                    ]:
+                    if biomarker_result["potential_biomarker"]:
 
                         st.success(
                             f"**{target_gene}** shows preliminary "
@@ -559,10 +541,15 @@ if uploaded_file:
                     else:
 
                         st.info(
-                            f"**{target_gene}** does not meet "
-                            "the current preliminary biomarker "
-                            "criteria."
+                            f"**{target_gene}** does not meet the "
+                            "current preliminary biomarker criteria."
                         )
+
+        except Exception as e:
+
+            st.error(
+                f"Error processing biomarker data: {e}"
+            )
 
 
 # ==========================================
@@ -571,9 +558,7 @@ if uploaded_file:
 
 st.divider()
 
-st.header(
-    "🤖 AI Research Assistant"
-)
+st.header("🤖 AI Research Assistant")
 
 st.write(
     "Generate an integrated interpretation using "
