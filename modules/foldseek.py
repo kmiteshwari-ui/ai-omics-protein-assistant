@@ -6,6 +6,7 @@ FOLDSEEK_API = "https://search.foldseek.com/api"
 
 
 def submit_structure(structure_url, protein_id):
+
     try:
         response = requests.get(
             structure_url,
@@ -15,12 +16,10 @@ def submit_structure(structure_url, protein_id):
         if response.status_code != 200:
             return None
 
-        structure_data = response.content
-
         files = {
             "q": (
                 f"{protein_id}.pdb",
-                structure_data,
+                response.content,
                 "application/octet-stream"
             )
         }
@@ -51,6 +50,7 @@ def get_foldseek_results(ticket_id, max_results=5):
     for _ in range(30):
 
         try:
+
             response = requests.get(
                 f"{FOLDSEEK_API}/ticket/{ticket_id}",
                 timeout=30
@@ -73,6 +73,7 @@ def get_foldseek_results(ticket_id, max_results=5):
             return None
 
     else:
+
         return None
 
 
@@ -97,28 +98,42 @@ def get_foldseek_results(ticket_id, max_results=5):
                 []
             )
 
+            # Handle unexpected API format
             if isinstance(alignments, dict):
                 alignments = [alignments]
 
+            if not isinstance(alignments, list):
+                continue
+
             for hit in alignments:
 
+                # Ignore invalid objects
+                if not isinstance(hit, dict):
+                    continue
+
+                target = hit.get(
+                    "target",
+                    "Unknown"
+                )
+
                 hits.append({
-                    "target": hit.get(
-                        "target",
-                        "Unknown"
-                    ),
+                    "target": target,
+
                     "sequence_identity": hit.get(
                         "seqId",
                         "N/A"
                     ),
+
                     "e_value": hit.get(
                         "eval",
                         "N/A"
                     ),
+
                     "alignment_length": hit.get(
                         "alnLength",
                         "N/A"
                     ),
+
                     "score": hit.get(
                         "score",
                         "N/A"
@@ -127,7 +142,8 @@ def get_foldseek_results(ticket_id, max_results=5):
 
         return hits[:max_results]
 
-    except requests.RequestException:
+    except (requests.RequestException, ValueError, TypeError):
+
         return None
 
 
