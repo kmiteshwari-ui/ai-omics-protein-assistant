@@ -11,6 +11,7 @@ def get_protein_info(protein_id):
 
     data = response.json()
 
+    # Protein name
     protein_name = (
         data.get("proteinDescription", {})
         .get("recommendedName", {})
@@ -18,23 +19,69 @@ def get_protein_info(protein_id):
         .get("value", "Not available")
     )
 
-    organism = data.get("organism", {}).get("scientificName", "Not available")
+    # Organism
+    organism = data.get("organism", {}).get(
+        "scientificName", "Not available"
+    )
 
+    # Sequence length
     sequence = data.get("sequence", {})
+    length = sequence.get("length", "Not available")
 
+    # Gene name
+    genes = data.get("genes", [])
+    gene_name = "Not available"
+
+    if genes:
+        gene_name = (
+            genes[0]
+            .get("geneName", {})
+            .get("value", "Not available")
+        )
+
+    # Function
     function = "Not available"
 
     for comment in data.get("comments", []):
         if comment.get("commentType") == "FUNCTION":
+
             texts = comment.get("texts", [])
+
             if texts:
-                function = texts[0].get("value", "Not available")
-                break
+                function = " ".join(
+                    text.get("value", "")
+                    for text in texts
+                    if text.get("value")
+                )
+
+            # Alternative format
+            if function == "Not available":
+                function = comment.get(
+                    "text", {}
+                ).get("value", "Not available")
+
+            break
+
+    # GO terms
+    go_terms = []
+
+    for reference in data.get("uniProtKBCrossReferences", []):
+        if reference.get("database") == "GO":
+            properties = reference.get("properties", [])
+
+            for prop in properties:
+                if prop.get("key") == "GoTerm":
+                    go_terms.append(prop.get("value"))
+
+    if not go_terms:
+        go_terms = ["Not available"]
 
     return {
         "protein_id": protein_id,
         "protein_name": protein_name,
+        "gene_name": gene_name,
         "organism": organism,
-        "length": sequence.get("length", "Not available"),
+        "length": length,
         "function": function,
+        "go_terms": go_terms,
     }
