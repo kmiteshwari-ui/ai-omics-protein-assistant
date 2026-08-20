@@ -1,471 +1,178 @@
-import requests
 import pandas as pd
 import numpy as np
+from scipy.stats import ttest_ind
 
 
-EXPRESSION_ATLAS_API = (
-    "https://www.ebi.ac.uk/gxa/api"
-)
-
-DISEASE_EFO = "EFO_0000408"
-
-
-def fetch_expression_atlas(
-    gene,
-    timeout=30
-):
+def analyze_biomarkers(df):
     """
-    Fetch disease-associated differential-expression
-    evidence for a human gene from EMBL-EBI
-    Expression Atlas.
+    Run biomarker statistics (fold change, Welch's t-test, BH-adjusted
+    p-value, biomarker score) across every gene in the uploaded dataset.
 
-    Returns a list of disease-associated
-    differential-expression observations.
+    Expected format:
+
+    Gene,H1,H2,H3,D1,D2,D3
+    CDK1,10,12,11,45,48,43
+
+    This is kept as an internal building block — BH correction is only
+    statistically meaningful across the full set of genes tested, so
+    analyze_single_protein() below runs this first and then extracts
+    just the one gene of interest.
     """
 
-    if not gene:
+    if "Gene" not in df.columns:
         return None
 
-    gene = str(gene).strip()
+    healthy_cols = [
+        col for col in df.columns
+        if col.startswith("H")
+    ]
 
-    if not gene:
+    disease_cols = [
+        col for col in df.columns
+        if col.startswith("D")
+    ]
+
+    if len(healthy_cols) < 2 or len(disease_cols) < 2:
         return None
 
-    params = {
-        "geneIs": gene,
-        "updownIn": DISEASE_EFO,
-        "format": "json"
-    }
+    results = []
 
-    try:
+    for _, row in df.iterrows():
 
-        response = requests.get(
-            EXPRESSION_ATLAS_API,
-            params=params,
-            timeout=timeout
-        )
+        gene = row["Gene"]
 
-        response.raise_for_status()
+        healthy = pd.to_numeric(
+            row[healthy_cols],
+            errors="coerce"
+        ).dropna().values
 
-        data = response.json()
+        disease = pd.to_numeric(
+            row[disease_cols],
+            errors="coerce"
+        ).dropna().values
 
-    except (
-        requests.RequestException,
-        ValueError
-    ):
-
-        return None
-
-    return data
-
-
-def _extract_results(data):
-    """
-    Expression Atlas has used slightly different
-    response structures over time. This helper
-    safely extracts the result records.
-    """
-
-    if not isinstance(data, dict):
-        return []
-
-    results = data.get(
-        "results",
-        []
-    )
-
-    if isinstance(results, list):
-        return results
-
-    return []
-
-
-def _extract_gene_name(record):
-    gene_data = record.get(
-        "gene",
-        {}
-    )
-
-    if isinstance(gene_data, dict):
-
-        return (
-            gene_data.get("name")
-            or gene_data.get("id")
-            or "Unknown"
-        )
-
-    return "Unknown"
-
-
-def _extract_disease_expression(
-    record
-):
-    """
-    Convert Expression Atlas expression records
-    into a simple dataframe-friendly structure.
-    """
-
-    expression_records = record.get(
-        "expressions",
-        []
-    )
-
-    if not isinstance(
-        expression_records,
-        list
-    ):
-        return []
-
-
-    rows = []
-
-
-    for expression in expression_records:
-
-        if not isinstance(
-            expression,
-            dict
-        ):
+        if len(healthy) < 2 or len(disease) < 2:
             continue
 
+        healthy_mean = np.mean(healthy)
+        disease_mean = np.mean(disease)
 
-        disease = expression.get(
-            "efoTerm",
-            "Disease-associated condition"
+        fold_change = (
+            (disease_mean + 0.01) /
+            (healthy_mean + 0.01)
         )
 
-        efo_id = expression.get(
-            "efoId",
-            ""
+        log2_fc = np.log2(fold_change)
+
+        # Welch's t-test
+        _, p_value = ttest_ind(
+            disease,
+            healthy,
+            equal_var=False
         )
 
-        up_experiments = expression.get(
-            "upExperiments",
-            0
-        )
-
-        down_experiments = expression.get(
-            "downExperiments",
-            0
-        )
-
-        non_de_experiments = expression.get(
-            "nonDEExperiments",
-            0
-        )
-
-        up_pvalue = expression.get(
-            "upPvalue",
-            np.nan
-        )
-
-        down_pvalue = expression.get(
-            "downPvalue",
-            np.nan
-        )
-
-
-        experiments = expression.get(
-            "experiments",
-            []
-        )
-
-
-        if isinstance(
-            experiments,
-            dict
-        ):
-            experiments = [
-                experiments
-            ]
-
-
-        if not experiments:
-
-            rows.append({
-
-                "Disease": disease,
-
-                "EFO ID": efo_id,
-
-                "Direction": (
-                    "UP"
-                    if up_experiments > down_experiments
-                    else "DOWN"
-                    if down_experiments > up_experiments
-                    else "Mixed"
-                ),
-
-                "Up Experiments": up_experiments,
-
-                "Down Experiments": down_experiments,
-
-                "Non-DE Experiments": (
-                    non_de_experiments
-                ),
-
-                "Up P-value": up_pvalue,
-
-                "Down P-value": down_pvalue,
-
-                "Experiment": "Multiple Atlas experiments"
-
-            })
-
-            continue
-
-
-        for experiment in experiments:
-
-            if not isinstance(
-                experiment,
-                dict
-            ):
-                continue
-
-
-            expression_direction = (
-                experiment.get(
-                    "expression",
-                    "UNKNOWN"
-                )
-            )
-
-
-            rows.append({
-
-                "Disease": disease,
-
-                "EFO ID": efo_id,
-
-                "Direction": expression_direction,
-
-                "Up Experiments": up_experiments,
-
-                "Down Experiments": down_experiments,
-
-                "Non-DE Experiments": (
-                    non_de_experiments
-                ),
-
-                "Up P-value": up_pvalue,
-
-                "Down P-value": down_pvalue,
-
-                "Experiment": experiment.get(
-                    "accession",
-                    "Unknown"
-                )
-
-            })
-
-
-    return rows
-
-
-def analyze_single_protein(
-    gene,
-    timeout=30
-):
-    """
-    Fetch disease-associated expression evidence
-    for the searched protein's gene.
-
-    No CSV upload is required.
-
-    Returns a dictionary containing:
-
-        gene
-        evidence
-        summary
-        potential_biomarker
-        direction
-        best_p_value
-    """
-
-    if not gene:
-
-        return None
-
-
-    data = fetch_expression_atlas(
-        gene,
-        timeout=timeout
-    )
-
-
-    if data is None:
-
-        return None
-
-
-    results = _extract_results(
-        data
-    )
-
+        results.append({
+            "Gene": gene,
+            "Healthy Mean": healthy_mean,
+            "Disease Mean": disease_mean,
+            "Fold Change": fold_change,
+            "Log2 Fold Change": log2_fc,
+            "P-value": p_value
+        })
 
     if not results:
-
         return None
 
+    results = pd.DataFrame(results)
 
-    all_rows = []
+    # Benjamini-Hochberg FDR correction
+    results = results.sort_values("P-value")
 
+    n = len(results)
 
-    for record in results:
-
-        rows = _extract_disease_expression(
-            record
+    results["Adjusted P-value"] = [
+        min(p * n / (i + 1), 1.0)
+        for i, p in enumerate(
+            results["P-value"]
         )
+    ]
 
-        all_rows.extend(
-            rows
+    # Biomarker score
+    results["Biomarker Score"] = (
+        abs(results["Log2 Fold Change"]) *
+        -np.log10(
+            results["Adjusted P-value"] + 1e-300
         )
+    )
+
+    results["Candidate"] = np.where(
+        (
+            (abs(results["Log2 Fold Change"]) >= 1)
+            &
+            (results["Adjusted P-value"] < 0.05)
+        ),
+        "Potential Candidate",
+        "Low Evidence"
+    )
+
+    results = results.sort_values(
+        "Biomarker Score",
+        ascending=False
+    )
+
+    return results
 
 
-    if not all_rows:
+def get_gene_evidence(results, gene_name):
+    """
+    Look up expression / biomarker evidence for ONE specific gene
+    within the full biomarker results table.
 
+    Returns a dict of that gene's row, or None if the gene isn't
+    present in the dataset, or no gene name is available at all.
+    """
+
+    if results is None or results.empty:
         return None
 
+    if not gene_name or gene_name == "Not available":
+        return None
 
-    df = pd.DataFrame(
-        all_rows
-    )
+    matches = results[
+        results["Gene"].astype(str).str.strip().str.upper()
+        == str(gene_name).strip().upper()
+    ]
 
+    if matches.empty:
+        return None
 
-    # --------------------------------------
-    # Direction summary
-    # --------------------------------------
-
-    up_count = int(
-        (
-            df["Direction"]
-            .astype(str)
-            .str.upper()
-            == "UP"
-        ).sum()
-    )
+    return matches.iloc[0].to_dict()
 
 
-    down_count = int(
-        (
-            df["Direction"]
-            .astype(str)
-            .str.upper()
-            == "DOWN"
-        ).sum()
-    )
+def analyze_single_protein(df, target_gene):
+    """
+    Entry point for the app: given the uploaded expression CSV and the
+    gene name of the protein currently being searched, return biomarker
+    evidence for THAT gene only.
 
+    Statistics (fold change, Welch's t-test, BH-adjusted p-value) are
+    still computed across the full dataset internally, since adjusted
+    p-values are only meaningful in the context of all genes tested —
+    but only target_gene's evidence is ever returned to the caller.
 
-    if up_count > down_count:
+    Returns:
+        dict  — evidence for target_gene, if the CSV is valid and the
+                gene is present in it.
+        None  — if the CSV is invalid/unusable, no target_gene was
+                provided, or target_gene isn't present in the dataset.
+    """
 
-        overall_direction = "Upregulated"
+    if not target_gene or target_gene == "Not available":
+        return None
 
-    elif down_count > up_count:
+    full_results = analyze_biomarkers(df)
 
-        overall_direction = "Downregulated"
+    if full_results is None:
+        return None
 
-    else:
-
-        overall_direction = "Mixed"
-
-
-    # --------------------------------------
-    # Best p-value
-    # --------------------------------------
-
-    p_values = []
-
-
-    for column in [
-        "Up P-value",
-        "Down P-value"
-    ]:
-
-        values = pd.to_numeric(
-            df[column],
-            errors="coerce"
-        )
-
-        p_values.extend(
-            values.dropna().tolist()
-        )
-
-
-    if p_values:
-
-        best_p_value = min(
-            p_values
-        )
-
-    else:
-
-        best_p_value = np.nan
-
-
-    # --------------------------------------
-    # Evidence strength
-    # --------------------------------------
-
-    total_disease_observations = len(
-        df
-    )
-
-
-    significant = False
-
-
-    if not np.isnan(
-        best_p_value
-    ):
-
-        significant = (
-            best_p_value <= 0.05
-        )
-
-
-    potential_biomarker = (
-        total_disease_observations >= 1
-        and significant
-    )
-
-
-    # --------------------------------------
-    # Summary
-    # --------------------------------------
-
-    summary = (
-        f"{gene} has "
-        f"{total_disease_observations} "
-        f"disease-associated expression "
-        f"observation(s) in Expression Atlas. "
-        f"The overall reported direction is "
-        f"{overall_direction.lower()}."
-    )
-
-
-    return {
-
-        "gene": gene,
-
-        "evidence": df,
-
-        "summary": summary,
-
-        "potential_biomarker": (
-            potential_biomarker
-        ),
-
-        "direction": overall_direction,
-
-        "best_p_value": best_p_value,
-
-        "source": (
-            "EMBL-EBI Expression Atlas"
-        ),
-
-        "source_url": (
-            "https://www.ebi.ac.uk/gxa/"
-        )
-
-    }
+    return get_gene_evidence(full_results, target_gene)
