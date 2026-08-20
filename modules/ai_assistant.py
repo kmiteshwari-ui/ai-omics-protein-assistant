@@ -1,12 +1,14 @@
-from modules.biomarker import get_gene_evidence
-
-
 def generate_protein_analysis(
     protein,
     alphafold=None,
     foldseek_results=None,
-    biomarker_results=None
+    biomarker_result=None
 ):
+    """
+    biomarker_result: dict (or None) — the evidence for THIS protein's
+    gene only, as returned by modules.biomarker.analyze_single_protein().
+    """
+
     report = []
 
     report.append("## 🤖 AI Research Assistant")
@@ -143,78 +145,65 @@ def generate_protein_analysis(
         )
 
     # ==========================================
-    # Biomarker analysis — tied to THIS protein's gene
+    # Biomarker analysis — for THIS protein's gene only
     # ==========================================
 
     report.append("### 🧪 Biomarker Analysis")
 
     gene_name = protein.get("gene_name")
 
-    if biomarker_results is None or biomarker_results.empty:
+    if biomarker_result is None:
 
         report.append(
-            "No biomarker dataset has been analyzed yet."
+            f"No biomarker evidence is available for "
+            f"**{gene_name}** ({protein['protein_name']}). "
+            f"Either no expression dataset has been analyzed yet, "
+            f"or this gene was not found in the uploaded dataset."
         )
 
     else:
 
-        gene_evidence = get_gene_evidence(
-            biomarker_results, gene_name
+        report.append(
+            f"Expression evidence for **{gene_name}** "
+            f"({protein['protein_name']}) was found in the "
+            f"uploaded dataset:"
         )
 
-        if gene_evidence is None:
+        report.append(
+            f"- Healthy Mean: "
+            f"**{biomarker_result['Healthy Mean']:.2f}**\n"
+            f"- Disease Mean: "
+            f"**{biomarker_result['Disease Mean']:.2f}**\n"
+            f"- Fold Change: "
+            f"**{biomarker_result['Fold Change']:.2f}**\n"
+            f"- Log₂ Fold Change: "
+            f"**{biomarker_result['Log2 Fold Change']:.2f}**\n"
+            f"- Adjusted P-value: "
+            f"**{biomarker_result['Adjusted P-value']:.4f}**"
+        )
+
+        if biomarker_result.get("Candidate") == "Potential Candidate":
 
             report.append(
-                f"The uploaded expression dataset does not "
-                f"contain data for **{gene_name}** "
-                f"({protein['protein_name']}), so no biomarker "
-                f"evidence is available for this specific protein "
-                f"from this dataset."
+                f"**{gene_name}** meets the fold-change and "
+                f"significance thresholds in this dataset and "
+                f"is flagged as a **potential biomarker "
+                f"candidate**."
             )
 
         else:
 
             report.append(
-                f"Expression evidence for **{gene_name}** "
-                f"({protein['protein_name']}) was found in the "
-                f"uploaded dataset:"
+                f"**{gene_name}** does not meet the "
+                f"fold-change / significance thresholds in "
+                f"this dataset, so it is not flagged as a "
+                f"biomarker candidate here."
             )
 
-            report.append(
-                f"- Healthy Mean: "
-                f"**{gene_evidence['Healthy Mean']:.2f}**\n"
-                f"- Disease Mean: "
-                f"**{gene_evidence['Disease Mean']:.2f}**\n"
-                f"- Fold Change: "
-                f"**{gene_evidence['Fold Change']:.2f}**\n"
-                f"- Log₂ Fold Change: "
-                f"**{gene_evidence['Log2 Fold Change']:.2f}**\n"
-                f"- Adjusted P-value: "
-                f"**{gene_evidence['Adjusted P-value']:.4f}**"
-            )
-
-            if gene_evidence.get("Candidate") == "Potential Candidate":
-
-                report.append(
-                    f"**{gene_name}** meets the fold-change and "
-                    f"significance thresholds in this dataset and "
-                    f"is flagged as a **potential biomarker "
-                    f"candidate**."
-                )
-
-            else:
-
-                report.append(
-                    f"**{gene_name}** does not meet the "
-                    f"fold-change / significance thresholds in "
-                    f"this dataset, so it is not flagged as a "
-                    f"biomarker candidate here."
-                )
-
-            report.append(
-                "This should be considered a research hypothesis "
-                "rather than a clinically validated biomarker."
-            )
+        report.append(
+            "This should be considered a research hypothesis "
+            "rather than a clinically validated biomarker."
+        )
 
     # ==========================================
     # Recommendations
