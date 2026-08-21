@@ -6,16 +6,23 @@ def get_protein_info(protein_id):
 
     try:
         response = requests.get(url, timeout=15)
-    except requests.RequestException:
-        return None
+    except requests.RequestException as e:
+        return None, f"Connection error reaching UniProt: {e}"
+
+    if response.status_code == 404:
+        return None, f"'{protein_id}' was not found on UniProt."
 
     if response.status_code != 200:
-        return None
+        return None, (
+            f"UniProt returned an unexpected status "
+            f"({response.status_code}). It may be temporarily "
+            f"unavailable — try again in a moment."
+        )
 
     try:
         data = response.json()
     except ValueError:
-        return None
+        return None, "UniProt returned an unreadable response."
 
     # Protein name
     protein_name = (
@@ -124,4 +131,4 @@ def get_protein_info(protein_id):
         "function": function,
         "function_source": function_source,
         "go_terms": go_terms,
-    }
+    }, None
