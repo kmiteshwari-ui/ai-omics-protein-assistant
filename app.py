@@ -110,14 +110,14 @@ if st.button("🔍 Analyze Protein"):
         "Fetching UniProt information..."
     ):
 
-        protein = get_protein_info(
+        protein, error = get_protein_info(
             protein_id
         )
 
     if protein is None:
 
         st.error(
-            "Protein ID not found."
+            error or "Protein ID not found."
         )
 
         st.session_state.protein = None
