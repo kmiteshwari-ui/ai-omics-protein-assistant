@@ -4,12 +4,18 @@ import requests
 def get_protein_info(protein_id):
     url = f"https://rest.uniprot.org/uniprotkb/{protein_id}.json"
 
-    response = requests.get(url, timeout=15)
+    try:
+        response = requests.get(url, timeout=15)
+    except requests.RequestException:
+        return None
 
     if response.status_code != 200:
         return None
 
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError:
+        return None
 
     # Protein name
     protein_name = (
